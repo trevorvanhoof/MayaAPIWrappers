@@ -1,16 +1,16 @@
 #include "Core.h"
 
 #pragma region array_helpers
-unsigned int arraySize(MDataBlock& b, const MObject& o) {
+unsigned int arraySize(Meta b, const MObject& o) {
 	MStatus status;
-	MArrayDataHandle h = b.inputArrayValue(o, &status); CHECK_MSTATUS_AND_RETURN(status, 0);
+	MArrayDataHandle h = b.data.inputArrayValue(o, &status); CHECK_MSTATUS_AND_RETURN(status, 0);
 	unsigned int r = h.elementCount(&status); CHECK_MSTATUS_AND_RETURN(status, 0);
 	return r;
 }
 
-MDataHandle arrayInputElement(MDataBlock& b, const MObject& o, unsigned int index, MStatus& status) {
+MDataHandle arrayInputElement(Meta b, const MObject& o, unsigned int index, MStatus& status) {
 	MDataHandle element;
-	MArrayDataHandle handle = b.inputArrayValue(o, &status); CHECK_MSTATUS_AND_RETURN(status, element);
+	MArrayDataHandle handle = b.data.inputArrayValue(o, &status); CHECK_MSTATUS_AND_RETURN(status, element);
 	status = handle.jumpToElement(index); CHECK_MSTATUS_AND_RETURN(status, element);
 	element = handle.inputValue(&status); CHECK_MSTATUS_AND_RETURN(status, element);
 	return element;
@@ -90,7 +90,7 @@ template<> MPoint get<MPoint>(MDataHandle& element) {
 }
 
 template<> void set<MPoint>(MDataHandle& element, const MPoint& value) {
-	element.set3Float(value.x, value.y, value.z);
+	element.set3Float((float)value.x, (float)value.y, (float)value.z);
 	element.setClean();
 }
 
@@ -106,7 +106,7 @@ template<> MVector get<MVector>(MDataHandle& element) {
 }
 
 template<> void set<MVector>(MDataHandle& element, const MVector& value) {
-	element.set3Float(value.x, value.y, value.z);
+	element.set3Float((float)value.x, (float)value.y, (float)value.z);
 	element.setClean();
 }
 
@@ -147,6 +147,49 @@ template<> MStatus initialize<MColor>(MObject& dst, const char* name) {
 	MFnNumericAttribute fn;
 	MStatus status;
 	dst = fn.createColor(name, name, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	return status;
+}
+
+/// createAddr has no setter, I'm gambling that we can set data the size of size_t
+template<> void* get<Addr>(MDataHandle& element) {
+	return element.asAddr();
+}
+
+template<> void set<Addr>(MDataHandle& element, const Addr& value) {
+	Addr addr = value;
+	size_t number = (size_t)addr;
+	static_assert(sizeof(size_t) == sizeof(double) || sizeof(size_t) == sizeof(float), "This works on 32-bit & 64-bit systems only");
+	if constexpr(sizeof(size_t) == sizeof(float)) {
+		element.setFloat(*reinterpret_cast<float*>(&number));
+	} else if constexpr(sizeof(size_t) == sizeof(double)) {
+		element.setDouble(*reinterpret_cast<double*>(&number));
+	}
+	element.setClean();
+}
+
+template<> MStatus initialize<void*>(MObject& dst, const char* name) {
+	MFnNumericAttribute fn;
+	MStatus status;
+	dst = fn.createAddr(name, name, nullptr, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	return status;
+}
+
+/// unsigned char has no setter, I'm gambling that it will work when setting any data of the right size
+template<> unsigned char get<unsigned char>(MDataHandle& element) {
+	return element.asUChar();
+}
+
+template<> void set<unsigned char>(MDataHandle& element, const unsigned char& value) {
+	unsigned char uval = value;
+	char val = *reinterpret_cast<char*>(&uval);
+	element.setChar(val);
+	element.setClean();
+}
+
+template<> MStatus initialize<unsigned char>(MObject& dst, const char* name) {
+	MFnNumericAttribute fn;
+	MStatus status;
+	dst = fn.create(name, name, MFnNumericData::kByte, 0.0, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	return status;
 }
 
@@ -266,6 +309,97 @@ template<> MStatus initialize<MQuaternion>(MObject& dst, const char* name) {
 	fn.setDefault(0.0, 0.0, 0.0, 1.0);
 	return status;
 }
+
+/// MFnMessageAttribute ///
+template<> Message getAttr<Message>(Meta b, const MObject& o) { return MPlug(b.node, o); }
+
+template<> Message getArray<Message>(Meta b, const MObject& o, int index) {
+	MStatus status;
+	MPlug result = MPlug(b.node, o).elementByPhysicalIndex(index, &status); CHECK_MSTATUS_AND_RETURN(status, result);
+	return result;
+}
+
+template<> MStatus initialize<Message>(MObject& dst, const char* name) {
+	MFnMessageAttribute fn;
+	MStatus status;
+	dst = fn.create(name, name, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	return status;
+}
+
+template<> void set<Message>(MDataHandle& element, const Message& value) {
+	#ifdef _DEBUG
+	__debugbreak(); // It is not valid to set message attributes, nothing will happen.
+	#endif
+	element.setClean();
+}
+
+/// MFnTypedAttribute ///
+#define IMPL_TATTR_A(T) template<> T get<T>(MDataHandle& element) {
+#define IMPL_TATTR_B(T) } template<> void set<T>(MDataHandle& element, const T& value) {\
+	element.setMObject(value); element.setClean(); }\
+template<> MStatus initialize<T>(MObject& dst, const char* name) {\
+	MFnTypedAttribute fn; MStatus status;\
+	dst = fn.create(name, name, MFnData::k##T, MObject::kNullObj, &status); CHECK_MSTATUS_AND_RETURN_IT(status);\
+	return status;}
+
+IMPL_TATTR_A(NurbsCurve)
+	return element.asNurbsCurve();
+IMPL_TATTR_B(NurbsCurve)
+
+IMPL_TATTR_A(Mesh)
+	return element.asMesh();
+IMPL_TATTR_B(Mesh)
+
+IMPL_TATTR_A(Lattice)
+	return element.data();
+IMPL_TATTR_B(Lattice)
+
+IMPL_TATTR_A(NurbsSurface)
+	return element.asNurbsSurface();
+IMPL_TATTR_B(NurbsSurface)
+
+IMPL_TATTR_A(Sphere)
+	return element.data();
+IMPL_TATTR_B(Sphere)
+
+IMPL_TATTR_A(ComponentList)
+	return element.data();
+IMPL_TATTR_B(ComponentList)
+
+IMPL_TATTR_A(DynArrayAttrs)
+	return element.data();
+IMPL_TATTR_B(DynArrayAttrs)
+
+IMPL_TATTR_A(DynSweptGeometry)
+	return element.data();
+IMPL_TATTR_B(DynSweptGeometry)
+
+IMPL_TATTR_A(SubdSurface)
+	return element.asSubdSurface();
+IMPL_TATTR_B(SubdSurface)
+
+IMPL_TATTR_A(NObject)
+	return element.data();
+IMPL_TATTR_B(NObject)
+
+IMPL_TATTR_A(NId)
+	return element.data();
+IMPL_TATTR_B(NId)
+
+#undef IMPL_TATTR_A
+#undef IMPL_TATTR_B
+
+/*
+kPlugin 	Plugin Blind Data, use MFnPluginData to extract the node data.
+kPluginGeometry 	Plugin Geometry, use MFnGeometryData to extract the node data.
+
+kString 	String, use MFnStringData to extract the node data.
+kStringArray 	String Array, use MFnStringArrayData to extract the node data.
+kDoubleArray 	Double Array, use MFnDoubleArrayData to extract the node data.
+kIntArray 	Int Array, use MFnIntArrayData to extract the node data.
+kPointArray 	Point Array, use MFnPointArrayData to extract the node data.
+kVectorArray 	Vector Array, use MFnVectorArrayData to extract the node data.
+*/
 #pragma endregion
 
 #pragma region plugin_main

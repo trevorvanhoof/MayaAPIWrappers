@@ -101,7 +101,7 @@ def scanCompound(code):
             assert stuff[:a].endswith('_VALUE')
         args = stuff[a + 1:b].split(',')
         assert len(args) == 2
-        members.append((args[0].strip(), args[1].strip()))
+        members.append((args[0].strip(), args[1].strip(), isArray))
     return compoundName, members
 
 
@@ -114,12 +114,18 @@ def processCompound(compoundType):
     dst = fn.create(name, name, &status); 
     CHECK_MSTATUS_AND_RETURN_IT(status);
 """ % name]
-    for attrType, attrName in attrs:
+    for attrType, attrName, isArray in attrs:
+        extra = ''
+        if isArray:
+            extra = """\n        status = MFnAttribute(attr).setArray(true); CHECK_MSTATUS_AND_RETURN_IT(status);"""
         code.append("""
     children.emplace_back();
-    status = initialize<%s>(children[children.size() - 1], "%s"); CHECK_MSTATUS_AND_RETURN_IT(status);
-    status = fn.addChild(children[children.size() - 1]); CHECK_MSTATUS_AND_RETURN_IT(status);
-""" % (attrType, attrName))
+    {
+        MObject& attr = children[children.size() - 1];
+        status = initialize<%s>(attr, "%s"); CHECK_MSTATUS_AND_RETURN_IT(status);%s
+        status = fn.addChild(attr); CHECK_MSTATUS_AND_RETURN_IT(status);
+    }
+""" % (attrType, attrName, extra))
     code.append("""
     return status;
 }""")
@@ -128,16 +134,22 @@ def processCompound(compoundType):
     %s result;
     MDataHandle child;
 """ % (name, name, name))
-    for index, (attrType, attrName) in enumerate(attrs):
-        code.append("""    child = element.child(objects[%d]); result.%s = get<%s>(child);\n""" % (index, attrName, attrType))
+    for index, (attrType, attrName, isArray) in enumerate(attrs):
+        extra = 'child'
+        if isArray:
+            extra = 'MArrayDataHandle(child)'
+        code.append("""    child = element.child(objects[%d]); result.%s = get<%s>(%s);\n""" % (index, attrName, attrType, extra))
     code.append("""    return result;
 }""")
     code.append("""
 template<> void set<%s>(MDataHandle& element, const std::vector<MObject>& objects, const %s& value) {
     MDataHandle child;
 """ % (name, name))
-    for index, (attrType, attrName) in enumerate(attrs):
-        code.append("""    child = element.child(objects[%s]); set<%s>(child, value.%s);\n    child.setClean();\n\n""" % (index, attrType, attrName))
+    for index, (attrType, attrName, isArray) in enumerate(attrs):
+        extra = 'child'
+        if isArray:
+            extra = 'MArrayDataHandle(child)'
+        code.append("""    child = element.child(objects[%s]); set<%s>(%s, value.%s);\n    child.setClean();\n\n""" % (index, attrType, extra, attrName))
     code.append("""    element.setClean();\n}\n\n""")
     return ''.join(code)
 
@@ -244,8 +256,7 @@ bool %s::isInputPlug(const MPlug& p) {
             if isCompound2:
                 # Each of the input's children affect each the output
                 code.append('    for(const MObject& obj2 : _%s_%s_children) {' % (nodeName, attrName2))
-                code.append(
-                    '        status = attributeAffects(obj2, %sAttr); CHECK_MSTATUS_AND_RETURN_IT(status);' % attrName)
+                code.append('        status = attributeAffects(obj2, %sAttr); CHECK_MSTATUS_AND_RETURN_IT(status);' % attrName)
                 # Each of the input's children affect each of the output's children'
                 # if isCompound:
                 #    code.append('    for(const MObject& obj : _%s_%s_children) {' % (nodeName, attrName))
@@ -263,16 +274,16 @@ bool %s::isInputPlug(const MPlug& p) {
         if isCompound:
             compoundArgs = ', _%s_%s_children' % (nodeName, attrName)
         if isArray:
-            code.append('int %s::%sSize(MDataBlock& dataBlock) { return arraySize(dataBlock, %sAttr); }' % (nodeName, attrName, attrName))
+            code.append('int %s::%sSize(Meta dataBlock) { return arraySize(dataBlock, %sAttr); }' % (nodeName, attrName, attrName))
             if not isOut:
-                code.append('%s %s::%s(MDataBlock& dataBlock, int index) { return getArray<%s>(dataBlock, %sAttr%s, index); }' % (attrType, nodeName, attrName, attrType, attrName, compoundArgs))
+                code.append('%s %s::%s(Meta dataBlock, int index) { return getArray<%s>(dataBlock, %sAttr%s, index); }' % (attrType, nodeName, attrName, attrType, attrName, compoundArgs))
             if not isIn:
-                code.append('void %s::%sSet(MDataBlock& dataBlock, const std::vector<%s>& value) { setArray<%s>(dataBlock, %sAttr%s, value); }' % (nodeName, attrName, attrType, attrType, attrName, compoundArgs))
+                code.append('void %s::%sSet(Meta dataBlock, const std::vector<%s>& value) { setArray<%s>(dataBlock, %sAttr%s, value); }' % (nodeName, attrName, attrType, attrType, attrName, compoundArgs))
         else:
             if not isOut:
-                code.append('%s %s::%s(MDataBlock& dataBlock) { return getAttr<%s>(dataBlock, %sAttr%s); }' % (attrType, nodeName, attrName, attrType, attrName, compoundArgs))
+                code.append('%s %s::%s(Meta dataBlock) { return getAttr<%s>(dataBlock, %sAttr%s); }' % (attrType, nodeName, attrName, attrType, attrName, compoundArgs))
             if not isIn:
-                code.append('void %s::%sSet(MDataBlock& dataBlock, const %s& value) { setAttr<%s>(dataBlock, %sAttr%s, value); }' % (nodeName, attrName, attrType, attrType, attrName, compoundArgs))
+                code.append('void %s::%sSet(Meta dataBlock, const %s& value) { setAttr<%s>(dataBlock, %sAttr%s, value); }' % (nodeName, attrName, attrType, attrType, attrName, compoundArgs))
         code.append('')
     return '\n'.join(code)
 

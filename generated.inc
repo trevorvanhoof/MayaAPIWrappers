@@ -15,16 +15,25 @@ template<> MStatus initialize<Linear3>(MObject& dst, const char* name, std::vect
     CHECK_MSTATUS_AND_RETURN_IT(status);
 
     children.emplace_back();
-    status = initialize<MDistance>(children[children.size() - 1], "x"); CHECK_MSTATUS_AND_RETURN_IT(status);
-    status = fn.addChild(children[children.size() - 1]); CHECK_MSTATUS_AND_RETURN_IT(status);
+    {
+        MObject& attr = children[children.size() - 1];
+        status = initialize<MDistance>(attr, "x"); CHECK_MSTATUS_AND_RETURN_IT(status);
+        status = fn.addChild(attr); CHECK_MSTATUS_AND_RETURN_IT(status);
+    }
 
     children.emplace_back();
-    status = initialize<MDistance>(children[children.size() - 1], "y"); CHECK_MSTATUS_AND_RETURN_IT(status);
-    status = fn.addChild(children[children.size() - 1]); CHECK_MSTATUS_AND_RETURN_IT(status);
+    {
+        MObject& attr = children[children.size() - 1];
+        status = initialize<MDistance>(attr, "y"); CHECK_MSTATUS_AND_RETURN_IT(status);
+        status = fn.addChild(attr); CHECK_MSTATUS_AND_RETURN_IT(status);
+    }
 
     children.emplace_back();
-    status = initialize<MDistance>(children[children.size() - 1], "z"); CHECK_MSTATUS_AND_RETURN_IT(status);
-    status = fn.addChild(children[children.size() - 1]); CHECK_MSTATUS_AND_RETURN_IT(status);
+    {
+        MObject& attr = children[children.size() - 1];
+        status = initialize<MDistance>(attr, "z"); CHECK_MSTATUS_AND_RETURN_IT(status);
+        status = fn.addChild(attr); CHECK_MSTATUS_AND_RETURN_IT(status);
+    }
 
     return status;
 }
@@ -57,12 +66,18 @@ template<> MStatus initialize<MatrixOnCurve>(MObject& dst, const char* name, std
     CHECK_MSTATUS_AND_RETURN_IT(status);
 
     children.emplace_back();
-    status = initialize<float>(children[children.size() - 1], "parameter"); CHECK_MSTATUS_AND_RETURN_IT(status);
-    status = fn.addChild(children[children.size() - 1]); CHECK_MSTATUS_AND_RETURN_IT(status);
+    {
+        MObject& attr = children[children.size() - 1];
+        status = initialize<float>(attr, "parameter"); CHECK_MSTATUS_AND_RETURN_IT(status);
+        status = fn.addChild(attr); CHECK_MSTATUS_AND_RETURN_IT(status);
+    }
 
     children.emplace_back();
-    status = initialize<MPoint>(children[children.size() - 1], "result"); CHECK_MSTATUS_AND_RETURN_IT(status);
-    status = fn.addChild(children[children.size() - 1]); CHECK_MSTATUS_AND_RETURN_IT(status);
+    {
+        MObject& attr = children[children.size() - 1];
+        status = initialize<MPoint>(attr, "result"); CHECK_MSTATUS_AND_RETURN_IT(status);
+        status = fn.addChild(attr); CHECK_MSTATUS_AND_RETURN_IT(status);
+    }
 
     return status;
 }
@@ -141,21 +156,21 @@ MStatus MyNode::initialize() {
 }
 
 
-double MyNode::inputValue(MDataBlock& dataBlock) { return getAttr<double>(dataBlock, inputValueAttr); }
+double MyNode::inputValue(Meta dataBlock) { return getAttr<double>(dataBlock, inputValueAttr); }
 
-int MyNode::inputArraySize(MDataBlock& dataBlock) { return arraySize(dataBlock, inputArrayAttr); }
-double MyNode::inputArray(MDataBlock& dataBlock, int index) { return getArray<double>(dataBlock, inputArrayAttr, index); }
+int MyNode::inputArraySize(Meta dataBlock) { return arraySize(dataBlock, inputArrayAttr); }
+double MyNode::inputArray(Meta dataBlock, int index) { return getArray<double>(dataBlock, inputArrayAttr, index); }
 
-void MyNode::outputValueSet(MDataBlock& dataBlock, const double& value) { setAttr<double>(dataBlock, outputValueAttr, value); }
+void MyNode::outputValueSet(Meta dataBlock, const double& value) { setAttr<double>(dataBlock, outputValueAttr, value); }
 
-int MyNode::outputArraySize(MDataBlock& dataBlock) { return arraySize(dataBlock, outputArrayAttr); }
-void MyNode::outputArraySet(MDataBlock& dataBlock, const std::vector<double>& value) { setArray<double>(dataBlock, outputArrayAttr, value); }
+int MyNode::outputArraySize(Meta dataBlock) { return arraySize(dataBlock, outputArrayAttr); }
+void MyNode::outputArraySet(Meta dataBlock, const std::vector<double>& value) { setArray<double>(dataBlock, outputArrayAttr, value); }
 
-Axis MyNode::enumTest(MDataBlock& dataBlock) { return getAttr<Axis>(dataBlock, enumTestAttr); }
+Axis MyNode::enumTest(Meta dataBlock) { return getAttr<Axis>(dataBlock, enumTestAttr); }
 
-int MyNode::pointArrayTestSize(MDataBlock& dataBlock) { return arraySize(dataBlock, pointArrayTestAttr); }
-Linear3 MyNode::pointArrayTest(MDataBlock& dataBlock, int index) { return getArray<Linear3>(dataBlock, pointArrayTestAttr, _MyNode_pointArrayTest_children, index); }
-void MyNode::pointArrayTestSet(MDataBlock& dataBlock, const std::vector<Linear3>& value) { setArray<Linear3>(dataBlock, pointArrayTestAttr, _MyNode_pointArrayTest_children, value); }
+int MyNode::pointArrayTestSize(Meta dataBlock) { return arraySize(dataBlock, pointArrayTestAttr); }
+Linear3 MyNode::pointArrayTest(Meta dataBlock, int index) { return getArray<Linear3>(dataBlock, pointArrayTestAttr, _MyNode_pointArrayTest_children, index); }
+void MyNode::pointArrayTestSet(Meta dataBlock, const std::vector<Linear3>& value) { setArray<Linear3>(dataBlock, pointArrayTestAttr, _MyNode_pointArrayTest_children, value); }
 MObject MatricesOnCurve::inputCurveAttr;
 MObject MatricesOnCurve::dataAttr;
 std::vector<MObject> _MatricesOnCurve_data_children;
@@ -179,10 +194,10 @@ MStatus MatricesOnCurve::initialize() {
 }
 
 
-NurbsCurve MatricesOnCurve::inputCurve(MDataBlock& dataBlock) { return getAttr<NurbsCurve>(dataBlock, inputCurveAttr); }
+NurbsCurve MatricesOnCurve::inputCurve(Meta dataBlock) { return getAttr<NurbsCurve>(dataBlock, inputCurveAttr); }
 
-int MatricesOnCurve::dataSize(MDataBlock& dataBlock) { return arraySize(dataBlock, dataAttr); }
-MatrixOnCurve MatricesOnCurve::data(MDataBlock& dataBlock, int index) { return getArray<MatrixOnCurve>(dataBlock, dataAttr, _MatricesOnCurve_data_children, index); }
-void MatricesOnCurve::dataSet(MDataBlock& dataBlock, const std::vector<MatrixOnCurve>& value) { setArray<MatrixOnCurve>(dataBlock, dataAttr, _MatricesOnCurve_data_children, value); }
+int MatricesOnCurve::dataSize(Meta dataBlock) { return arraySize(dataBlock, dataAttr); }
+MatrixOnCurve MatricesOnCurve::data(Meta dataBlock, int index) { return getArray<MatrixOnCurve>(dataBlock, dataAttr, _MatricesOnCurve_data_children, index); }
+void MatricesOnCurve::dataSet(Meta dataBlock, const std::vector<MatrixOnCurve>& value) { setArray<MatrixOnCurve>(dataBlock, dataAttr, _MatricesOnCurve_data_children, value); }
 
 #define INITIALIZE_PLUGIN REGISTER_NODE(MyNode) REGISTER_NODE(MatricesOnCurve)

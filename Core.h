@@ -25,35 +25,81 @@
 #include <maya/MFloatMatrix.h>
 #include <maya/MTransformationMatrix.h>
 #include <maya/MQuaternion.h>
+#include <maya/MFnMessageAttribute.h>
+#include <maya/MFnTypedAttribute.h>
 
-#define DECL_MFN_MOBJECT(N) class N : public MObject {};
+#define DECL_MFN_MOBJECT(N) struct N { MObject obj; N(MObject obj) : obj(obj) {} operator MObject() { return obj; } operator const MObject&() const { return obj; } };
 
 #include "MFnHelpers.inc"
+
+struct Meta {
+	MObject node;
+	MDataBlock& data;
+	Meta(MObject node, MDataBlock& data) : node(node), data(data) {}
+	operator MDataBlock&() { return data; }
+};
 
 template<typename T>
 class TMPxNode : public MPxNode {
 public:
 	static void* creator() { return new T; }
 protected:
-	virtual void compute(MDataBlock& b) = 0;
+	virtual void compute(Meta b) = 0;
 	virtual bool isInputPlug(const MPlug& p) = 0;
 private:
-	MStatus compute(const MPlug& p, MDataBlock& b) override { if (!isInputPlug(p)) return MS::kUnknownParameter; compute(b); return MS::kSuccess; }
+	MStatus compute(const MPlug& p, MDataBlock& b) override { if (!isInputPlug(p)) return MS::kUnknownParameter; compute({thisMObject(), b}); return MS::kSuccess; }
 };
 
 MStatus enumInitialize(MObject& dst, const MString& enumName, const std::vector<MString>& fieldNames, const std::vector<short> fieldIndices) {
 	MFnEnumAttribute fn;
 	MStatus status;
 	dst = fn.create(enumName, enumName, fieldIndices[0], &status); CHECK_MSTATUS_AND_RETURN_IT(status);
-	for (int i = 0; i < fieldNames.size(); ++i) {
-		status = fn.addField(fieldNames[i], fieldIndices[i]); 
+	for (unsigned int i = 0; i < fieldNames.size(); ++i) {
+		status = fn.addField(fieldNames[i], fieldIndices[i]);
 		CHECK_MSTATUS_AND_RETURN_IT(status);
 	}
 	return status;
 }
 
-unsigned int arraySize(MDataBlock& b, const MObject& o);
-MDataHandle arrayInputElement(MDataBlock& b, const MObject& o, unsigned int index, MStatus& status);
+unsigned int arraySize(Meta b, const MObject& o);
+MDataHandle arrayInputElement(Meta b, const MObject& o, unsigned int index, MStatus& status);
+
+template<typename T> std::vector<T> get(MArrayDataHandle& element) {
+	std::vector<T> result;
+	result.reserve(element.elementCount());
+	for (unsigned int i = 0; i < element.elementCount(); ++i) {
+		element.jumpToArrayElement(i);
+		result.push_back(get<T>(element.inputValue()));
+	}
+	return result;
+}
+template<typename T> T get(MArrayDataHandle& element, const std::vector<MObject>& compoundChildren) {
+	std::vector<T> result;
+	result.reserve(element.elementCount());
+	for (unsigned int i = 0; i < element.elementCount(); ++i) {
+		element.jumpToArrayElement(i);
+		result.push_back(get<T>(element.inputValue(), compoundChildren));
+	}
+	return result;
+}
+template<typename T> void set(MArrayDataHandle& element, const std::vector<T>& value) {
+	MStatus status;
+	MArrayDataBuilder builder = element.builder(&status); CHECK_MSTATUS(status); if (MStatus::kSuccess != status) return;
+	for (unsigned int index = 0; index < (unsigned int)value.size(); ++index) {
+		MDataHandle child = builder.addElement(index, &status); CHECK_MSTATUS(status); if (MStatus::kSuccess != status) return;
+		set<T>(child, value[index]);
+	}
+	element.set(builder);
+}
+template<typename T> void set(MArrayDataHandle& element, const std::vector<MObject>& compoundChildren, const T& value) {
+	MStatus status;
+	MArrayDataBuilder builder = element.builder(&status); CHECK_MSTATUS(status); if (MStatus::kSuccess != status) return;
+	for (unsigned int index = 0; index < (unsigned int)value.size(); ++index) {
+		MDataHandle child = builder.addElement(index, &status); CHECK_MSTATUS(status); if (MStatus::kSuccess != status) return;
+		set<T>(child, compoundChildren, value[index]);
+	}
+	element.set(builder);
+}
 
 template<typename T> T get(MDataHandle& element);
 template<typename T> T get(MDataHandle& element, const std::vector<MObject>& compoundChildren);
@@ -61,17 +107,17 @@ template<typename T> void set(MDataHandle& element, const T& value);
 template<typename T> void set(MDataHandle& element, const std::vector<MObject>& compoundChildren, const T& value);
 template<typename T> T fallback() { return T(); } // fallback value in case of errors
 
-template<typename T> T getAttr(MDataBlock& b, const MObject& o) { MDataHandle h = b.inputValue(o); return get<T>(h); }
-template<typename T> T getAttr(MDataBlock& b, const MObject& o, const std::vector<MObject>& compoundChildren) { MDataHandle h = b.inputValue(o); return get<T>(h, compoundChildren); }
+template<typename T> T getAttr(Meta b, const MObject& o) { MDataHandle h = b.data.inputValue(o); return get<T>(h); }
+template<typename T> T getAttr(Meta b, const MObject& o, const std::vector<MObject>& compoundChildren) { MDataHandle h = b.data.inputValue(o); return get<T>(h, compoundChildren); }
 
-template<typename T> T getArray(MDataBlock& b, const MObject& o, int index) {
+template<typename T> T getArray(Meta b, const MObject& o, int index) {
 	MStatus status;
 	MDataHandle element = arrayInputElement(b, o, index, status);
 	if (status != MS::kSuccess) // element is not valid
 		return fallback<T>();
 	return get<T>(element);
 }
-template<typename T> T getArray(MDataBlock& b, const MObject& o, const std::vector<MObject>& compoundChildren, int index) {
+template<typename T> T getArray(Meta b, const MObject& o, const std::vector<MObject>& compoundChildren, int index) {
 	MStatus status;
 	MDataHandle element = arrayInputElement(b, o, index, status);
 	if (status != MS::kSuccess) // element is not valid
@@ -79,24 +125,24 @@ template<typename T> T getArray(MDataBlock& b, const MObject& o, const std::vect
 	return get<T>(element, compoundChildren);
 }
 
-template<typename T> MStatus setAttr(MDataBlock& b, const MObject& o, const T& value) {
+template<typename T> MStatus setAttr(Meta b, const MObject& o, const T& value) {
 	MStatus status;
-	MDataHandle element = b.outputValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	MDataHandle element = b.data.outputValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	set<T>(element, value);
 	return status;
 }
 
-template<typename T> MStatus setAttr(MDataBlock& b, const MObject& o, const std::vector<MObject>& compoundChildren, const T& value) {
+template<typename T> MStatus setAttr(Meta b, const MObject& o, const std::vector<MObject>& compoundChildren, const T& value) {
 	MStatus status;
-	MDataHandle element = b.outputValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	MDataHandle element = b.data.outputValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	set<T>(element, compoundChildren, value);
 	return status;
 }
 
-template<typename T> MStatus setArray(MDataBlock& b, const MObject& o, const std::vector<T>& value) {
+template<typename T> MStatus setArray(Meta b, const MObject& o, const std::vector<T>& value) {
 	MStatus status;
 	MDataHandle element;
-	MArrayDataHandle handle = b.outputArrayValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	MArrayDataHandle handle = b.data.outputArrayValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	MArrayDataBuilder builder = handle.builder(&status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	for (unsigned int index = 0; index < (unsigned int)value.size(); ++index) {
 		element = builder.addElement(index, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -106,10 +152,10 @@ template<typename T> MStatus setArray(MDataBlock& b, const MObject& o, const std
 	return status;
 }
 
-template<typename T> MStatus setArray(MDataBlock& b, const MObject& o, const std::vector<MObject>& compoundChildren, const std::vector<T>& value) {
+template<typename T> MStatus setArray(Meta b, const MObject& o, const std::vector<MObject>& compoundChildren, const std::vector<T>& value) {
 	MStatus status;
 	MDataHandle element;
-	MArrayDataHandle handle = b.outputArrayValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	MArrayDataHandle handle = b.data.outputArrayValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	MArrayDataBuilder builder = handle.builder(&status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	for (unsigned int index = 0; index < (unsigned int)value.size(); ++index) {
 		element = builder.addElement(index, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
@@ -122,13 +168,13 @@ template<typename T> MStatus setArray(MDataBlock& b, const MObject& o, const std
 template<typename T> MStatus initialize(MObject& dst, const char* name);
 template<typename T> MStatus initialize(MObject& dst, const char* name, std::vector<MObject>& dstChildren);
 
-#define NODE_BEGIN(N) class N : public TMPxNode<N> { public: static MStatus initialize(); protected: virtual bool isInputPlug(const MPlug& p) override; virtual void compute(MDataBlock& b) override
-#define INPUT(T, N) static MObject N##Attr; T N(MDataBlock& dataBlock);
-#define OUTPUT(T, N) static MObject N##Attr; void N##Set(MDataBlock& dataBlock, const T& value);
-#define INOUT(T, N) static MObject N##Attr; T N(MDataBlock& dataBlock); void N##Set(MDataBlock& dataBlock, const T& value);
-#define INPUT_ARRAY(T, N) static MObject N##Attr; int N##Size(MDataBlock& dataBlock); T N(MDataBlock& dataBlock, int index);
-#define OUTPUT_ARRAY(T, N) static MObject N##Attr; int N##Size(MDataBlock& dataBlock); void N##Set(MDataBlock& dataBlock, const std::vector<T>& value);
-#define INOUT_ARRAY(T, N) static MObject N##Attr; int N##Size(MDataBlock& dataBlock); T N(MDataBlock& dataBlock, int index); void N##Set(MDataBlock& dataBlock, const std::vector<T>& value);
+#define NODE_BEGIN(N) class N : public TMPxNode<N> { public: static MStatus initialize(); protected: virtual bool isInputPlug(const MPlug& p) override; virtual void compute(Meta b) override
+#define INPUT(T, N) static MObject N##Attr; T N(Meta dataBlock);
+#define OUTPUT(T, N) static MObject N##Attr; void N##Set(Meta dataBlock, const T& value);
+#define INOUT(T, N) static MObject N##Attr; T N(Meta dataBlock); void N##Set(Meta dataBlock, const T& value);
+#define INPUT_ARRAY(T, N) static MObject N##Attr; int N##Size(Meta dataBlock); T N(Meta dataBlock, int index);
+#define OUTPUT_ARRAY(T, N) static MObject N##Attr; int N##Size(Meta dataBlock); void N##Set(Meta dataBlock, const std::vector<T>& value);
+#define INOUT_ARRAY(T, N) static MObject N##Attr; int N##Size(Meta dataBlock); T N(Meta dataBlock, int index); void N##Set(Meta dataBlock, const std::vector<T>& value);
 #define NODE_END };
 
 #define ENUM_BEGIN(N) enum class N {

@@ -6,14 +6,11 @@ This is a work in progress, the following documentation may be more complete tha
 
 #### TODO
 
-MFnMessageAttribute
-MFnTypedAttribute
-MPxDeformer
-MPxLocator
-
-MFnNumericAttribute: createAddr, unsigned byte implementation
-
-Commands...
+- MPxDeformer: 
+- MPxLocator: 
+- MPxCommand: This needs the whole API design to be done
+- MFnTypedAttribute: Attributes of type kPlugin & kPluginGeometry are not supported yet
+- Nested compounds are not supported yet: this may be as simple as passing in the right object array in Generate.py
 
 ---
 
@@ -198,12 +195,16 @@ NODE_END
 
 #### Caveats
 Maya provides convenience functions createPoint and createColor, internally those are stored as 32-bit floats.
+
 We also use createPoint for MVector & MPoint attributes, technically this results in data loss. To avoid this
 either use DVec3/DVec4 or create your own compound types to have child-plugs (DVec3 won't provide those).
+
+Calling setters on output attributes of type message is not permitted.
 
 #### Omissions
 We have omitted 2 number types: `byte` and `addr`, they can not be set using MDataHandle.
 We have omitted types that would normally use: MFnGenericAttribute, MFnLightDataAttribute.
+We have omitted kDynArrayAttrs as it's just a dictionary of typed array attributes and you can achieve the same thing more safely by using multiple attributes instead.
 
 #### Renames
 We have aliases for the numeric array types:
