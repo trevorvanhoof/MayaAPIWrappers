@@ -198,6 +198,74 @@ template<> MStatus initialize<MTime>(MObject& dst, const char* name) {
 	dst = fn.create(name, name, MFnUnitAttribute::kTime, 0.0, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	return status;
 }
+
+/// MFnMatrixAttribute ///
+template<> MMatrix get<MMatrix>(MDataHandle& element) {
+	return element.asMatrix();
+}
+
+template<> void set<MMatrix>(MDataHandle& element, const MMatrix& value) {
+	element.setMMatrix(value);
+	element.setClean();
+}
+
+template<> MStatus initialize<MMatrix>(MObject& dst, const char* name) {
+	MFnMatrixAttribute fn;
+	MStatus status;
+	dst = fn.create(name, name, MFnMatrixAttribute::kDouble, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	return status;
+}
+
+
+template<> MFloatMatrix get<MFloatMatrix>(MDataHandle& element) {
+	return element.asFloatMatrix();
+}
+
+template<> void set<MFloatMatrix>(MDataHandle& element, const MFloatMatrix& value) {
+	element.setMFloatMatrix(value);
+	element.setClean();
+}
+
+template<> MStatus initialize<MFloatMatrix>(MObject& dst, const char* name) {
+	MFnMatrixAttribute fn;
+	MStatus status;
+	dst = fn.create(name, name, MFnMatrixAttribute::kFloat, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	return status;
+}
+
+template<> MTransformationMatrix get<MTransformationMatrix>(MDataHandle& element) {
+	return element.asMatrix();
+}
+
+template<> void set<MTransformationMatrix>(MDataHandle& element, const MTransformationMatrix& value) {
+	element.setMMatrix(value.asMatrix());
+	element.setClean();
+}
+
+template<> MStatus initialize<MTransformationMatrix>(MObject& dst, const char* name) {
+	MFnMatrixAttribute fn;
+	MStatus status;
+	dst = fn.create(name, name, MFnMatrixAttribute::kDouble, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	return status;
+}
+
+template<> MQuaternion get<MQuaternion>(MDataHandle& element) {
+	double4& tmp = element.asDouble4();
+	return MQuaternion(tmp[0], tmp[1], tmp[2], tmp[3]);
+}
+
+template<> void set<MQuaternion>(MDataHandle& element, const MQuaternion& value) {
+	element.set4Double(value.x, value.y, value.z, value.w);
+	element.setClean();
+}
+
+template<> MStatus initialize<MQuaternion>(MObject& dst, const char* name) {
+	MFnNumericAttribute fn;
+	MStatus status;
+	dst = fn.create(name, name, MFnNumericData::k4Double, 0.0, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
+	fn.setDefault(0.0, 0.0, 0.0, 1.0);
+	return status;
+}
 #pragma endregion
 
 #pragma region plugin_main
@@ -218,7 +286,7 @@ __declspec(dllexport) MStatus initializePlugin(MObject pluginObj) {
 	MStatus status;
 	MFnPlugin fn(pluginObj);
 	INITIALIZE_PLUGIN
-	return MS::kSuccess;
+		return MS::kSuccess;
 }
 
 __declspec(dllexport) MStatus uninitializePlugin(MObject pluginObj) {

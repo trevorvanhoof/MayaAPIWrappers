@@ -9,6 +9,7 @@
 #include <maya/MPxNode.h>
 #include <maya/MString.h>
 #include <maya/MFnNumericAttribute.h>
+#include <maya/MFnMatrixAttribute.h>
 #include <maya/MFnCompoundAttribute.h>
 #include <maya/MFnEnumAttribute.h>
 #include <maya/MArrayDataBuilder.h>
@@ -20,6 +21,10 @@
 #include <maya/MPoint.h>
 #include <maya/MVector.h>
 #include <maya/MColor.h>
+#include <maya/MMatrix.h>
+#include <maya/MFloatMatrix.h>
+#include <maya/MTransformationMatrix.h>
+#include <maya/MQuaternion.h>
 
 #define DECL_MFN_MOBJECT(N) class N : public MObject {};
 

@@ -6,7 +6,6 @@ This is a work in progress, the following documentation may be more complete tha
 
 #### TODO
 
-MFnMatrixAttribute
 MFnMessageAttribute
 MFnTypedAttribute
 MPxDeformer
