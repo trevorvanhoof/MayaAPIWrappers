@@ -47,18 +47,16 @@ With minimal setup, you write only the code that is relevant to your implementat
 ### Caveats
 It is currently not possible to use this system alongside other plugin code, as it completely generates the initializePlugin function.
 
-As it is early days we do not support nodes that don't derive directly from MPxNode, and we don't support commands. 
-
-These are both on our roadmap, with MPxDeformer and MPxLocator at the top.
+See the TODO section above for features that are planned. Intentionally omitted features are reported below in the HOWTO section relevant to them.
 
 ### Project setup
-To use this in your project, you will need to add `Generate.py`, `Core.h` and `Main.cpp`.
+To use this in your project, you will need to add `Generate.py`, `MFnHelpers.inc`,  `Core.h` and `Main.cpp`.
 
-After setting up your maya include/ and lib/ paths, you need to set up a pre-build event.
-
-The pre-build event needs to call python, which conveniencly comes with Maya, the full command line can look like this:
+You will also need to set up a pre-build event in the project's properties (See the Configuration Properties/Build Events/Pre-Build Event/Command Line subsection). The pre-build event needs to call python, which Maya conveniently already includes. The full command line can look like this (when installing Maya2020 in the default location this works verbatim):
 
 > "C:\Program Files\Autodesk\Maya2020\bin\mayapy.exe" Generate.py
+
+Like any Maya project, setting up your maya include/ and lib/ paths, as well as outputting to an .mll file are also required.
 
 ### First node
 All your code will become header-only, so to start creating a node, just add a new header file `MyFirstNode.h` and add the following:
@@ -74,7 +72,7 @@ NODE_END
 _This code is elaborated in the Howtos & Examples below._
 
 ### Type IDs
-Finally, maya plugins use MTypeId's to distinguish nodes from each other.
+Maya plugins use MTypeId's to distinguish nodes from each other.
 This plugin will put all nodes on consecutive IDs starting at 0.
 
 If you want to start at a different number, simply add this to 1 of your header file:
