@@ -24,9 +24,9 @@ def findFirstOf(data, options, startAt):
 def scan(path):
     with open(path, 'r') as fh:
         code = fh.read()
-    startTokens = ('NODE_BEGIN(', 'ENUM_BEGIN(', 'COMPOUND_BEGIN(')
-    endTokens = ('NODE_END', 'ENUM_END', 'COMPOUND_END')
-    output = ([], [], [])
+    startTokens = ('NODE_BEGIN(', 'ENUM_BEGIN(', 'COMPOUND_BEGIN(', 'DEFORMER_BEGIN(', 'TYPED_DEFORMER_BEGIN(')
+    endTokens = ('NODE_END', 'ENUM_END', 'COMPOUND_END', 'DEFORMER_END', 'DEFORMER_END')
+    output = tuple([] for _ in range(len(startTokens)))
     cursor = 0
     while True:
         result = findFirstOf(code, startTokens, cursor)
@@ -160,19 +160,27 @@ def scanNode(code, compoundTypeNames):
     tmp = code.find(')', cursor + 1)
     assert tmp != -1
     nodeName = code[cursor + 1:tmp]
+    # for deformers we must strip additional arguments inside the macro
+    nodeName = nodeName.split(',')[0].strip()
     nodeAttrs = []
     tokens = ('INPUT(', 'INOUT(', 'OUTPUT(', 'INPUT_ARRAY(', 'INOUT_ARRAY(', 'OUTPUT_ARRAY(')
-    cursor, tokenId = findFirstOf(code, tokens, tmp + 1)
-    for stuff in code[cursor:].split(')')[:-1]:
-        if not stuff.strip(): continue
-        label, args = stuff.split('(', 1)
-        isArray = label.endswith('_ARRAY')
+    for ln in code.splitlines():
+        ln = ln.strip()
+        for token in tokens: 
+            if ln.startswith(token):
+                break
+        else: 
+            continue # There might be some more code inlined
+        assert ln.endswith(')')
+        ln = ln.rstrip(')')
+        isArray = token.endswith('_ARRAY(')
+        label, args = ln.split('(', 1)
         if isArray:
             label = label[:-6]
-        isIn = label.endswith('INPUT')
-        isOut = label.endswith('OUTPUT')
+        isIn = label == 'INPUT'
+        isOut = label == 'OUTPUT'
         if not isIn and not isOut:
-            assert label.endswith('INOUT'), label
+            assert label == 'INOUT', label
         args = args.split(',')
         assert len(args) == 2
         args = tuple(arg.strip() for arg in args)
@@ -181,7 +189,7 @@ def scanNode(code, compoundTypeNames):
     return nodeName, nodeAttrs
 
 
-def processNode(nodeName, nodeAttrs):
+def processNode(nodeName, nodeAttrs, isDeformer=False):
     code = []
     inputNames = []
     outputNames = []
@@ -197,14 +205,15 @@ def processNode(nodeName, nodeAttrs):
         if isCompound:
             code.append('std::vector<MObject> _%s_%s_children;' % (nodeName, attrName))
 
-    if not inputNames:
-        code.append("""
+    if not isDeformer:
+        if not inputNames:
+            code.append("""
 bool %s::isInputPlug(const MPlug& p) {
     return false;
 }
 """ % nodeName)
-    else:
-        code.append("""
+        else:
+            code.append("""
 bool %s::isInputPlug(const MPlug& p) {
     return (p == %sAttr);
 }
@@ -219,8 +228,7 @@ bool %s::isInputPlug(const MPlug& p) {
         code.append('    status = ::initialize<%s>(%sAttr, "%s"%s); CHECK_MSTATUS_AND_RETURN_IT(status);' % (
         attrType, attrName, attrName, args))
         if isArray:
-            code.append(
-                '    status = MFnAttribute(%sAttr).setArray(true); CHECK_MSTATUS_AND_RETURN_IT(status);' % attrName)
+            code.append('    status = MFnAttribute(%sAttr).setArray(true); CHECK_MSTATUS_AND_RETURN_IT(status);' % attrName)
         code.append('    status = addAttribute(%sAttr); CHECK_MSTATUS_AND_RETURN_IT(status);\n' % attrName)
 
     for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
@@ -248,8 +256,7 @@ bool %s::isInputPlug(const MPlug& p) {
                 # Each of the input's children affect each of the output's children
                 if isCompound2:
                     code.append('        for(const MObject& obj2 : _%s_%s_children) {' % (nodeName, attrName2))
-                    code.append(
-                        '            status = attributeAffects(obj2, obj); CHECK_MSTATUS_AND_RETURN_IT(status);')
+                    code.append('            status = attributeAffects(obj2, obj); CHECK_MSTATUS_AND_RETURN_IT(status);')
                     code.append('        }')
                 code.append('    }')
 
@@ -266,6 +273,8 @@ bool %s::isInputPlug(const MPlug& p) {
 
         code.append('')
 
+    if isDeformer:
+        code.append('    makePaintable("%s");' % nodeName)
     code.append('    return status;')
     code.append('}\n\n')
 
@@ -298,7 +307,7 @@ def main():
             if path.lower().replace('/', '\\').endswith('\\core.h'):
                 continue
             fh.write('#include "%s"\n\n' % os.path.relpath(path, root))
-            nodeCode, enumCode, compoundCode = scan(path)
+            nodeCode, enumCode, compoundCode, deformerCode, typedDeformerCode = scan(path)
             enumNames = []
             compoundTypes = []
             for code in enumCode:
@@ -310,15 +319,18 @@ def main():
                 compoundTypes.append(scanCompound(code))
             for compoundType in compoundTypes:
                 fh.write(processCompound(compoundType))
-            nodeNames = []
-            for code in nodeCode:
-                nodeName, nodeAttrs = scanNode(code, set(name for (name, _) in compoundTypes))
-                nodeNames.append(nodeName)
-                fh.write(processNode(nodeName, nodeAttrs))
-            if nodeNames:
-                fh.write('\n#define INITIALIZE_PLUGIN REGISTER_NODE(%s)' % ') REGISTER_NODE('.join(nodeNames))
-            else:
-                fh.write('\n#define INITIALIZE_PLUGIN')
+            registerPlugin = []
+            for grpId, grp in enumerate((nodeCode, deformerCode, typedDeformerCode)):
+                isDeformer = grpId in (1, 2)
+                for code in grp:
+                    nodeName, nodeAttrs = scanNode(code, set(name for (name, _) in compoundTypes))
+                    if isDeformer:
+                        registerPlugin.append('REGISTER_DEFORMER(%s)' % nodeName)
+                    else:
+                        registerPlugin.append('REGISTER_NODE(%s)' % nodeName)
+                    fh.write(processNode(nodeName, nodeAttrs, isDeformer))
+            if registerPlugin:
+                fh.write('\n#define INITIALIZE_PLUGIN %s' % ' '.join(registerPlugin))
 
 
 if __name__ == '__main__':

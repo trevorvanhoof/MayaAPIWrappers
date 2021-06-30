@@ -415,12 +415,13 @@ int pluginIdCursor = pluginStartId;
 std::vector<MString> registeredCommands;
 
 #define REGISTER_NODE(T) status = fn.registerNode(#T, pluginIdCursor, T::creator, T::initialize); ++pluginIdCursor; CHECK_MSTATUS_AND_RETURN_IT(status);
+#define REGISTER_DEFORMER(T) status = fn.registerNode(#T, pluginIdCursor, T::creator, T::initialize, MPxNode::kDeformerNode); ++pluginIdCursor; CHECK_MSTATUS_AND_RETURN_IT(status);
 
 __declspec(dllexport) MStatus initializePlugin(MObject pluginObj) {
 	MStatus status;
 	MFnPlugin fn(pluginObj);
-	INITIALIZE_PLUGIN
-		return MS::kSuccess;
+	INITIALIZE_PLUGIN;
+	return MS::kSuccess;
 }
 
 __declspec(dllexport) MStatus uninitializePlugin(MObject pluginObj) {

@@ -2,6 +2,7 @@
 
 #pragma comment(lib, "Foundation.lib")
 #pragma comment(lib, "OpenMaya.lib")
+#pragma comment(lib, "OpenMayaAnim.lib")
 
 #include <vector>
 
@@ -27,6 +28,12 @@
 #include <maya/MQuaternion.h>
 #include <maya/MFnMessageAttribute.h>
 #include <maya/MFnTypedAttribute.h>
+#include <maya/MPxDeformerNode.h>
+#include <maya/MFnMesh.h>
+#include <maya/MItMeshVertex.h>
+#include <maya/MPointArray.h>
+#include <maya/MItGeometry.h>
+#include <maya/MGlobal.h>
 
 #define DECL_MFN_MOBJECT(N) struct N { MObject obj; N(MObject obj) : obj(obj) {} operator MObject() { return obj; } operator const MObject&() const { return obj; } };
 
@@ -35,8 +42,9 @@
 struct Meta {
 	MObject node;
 	MDataBlock& data;
-	Meta(MObject node, MDataBlock& data) : node(node), data(data) {}
-	operator MDataBlock&() { return data; }
+	unsigned int deformerMultiIndex;
+	Meta(MObject node, MDataBlock& data, unsigned int deformerMultiIndex = 0) : node(node), data(data), deformerMultiIndex(deformerMultiIndex) {}
+	operator MDataBlock& () { return data; }
 };
 
 template<typename T>
@@ -47,7 +55,41 @@ protected:
 	virtual void compute(Meta b) = 0;
 	virtual bool isInputPlug(const MPlug& p) = 0;
 private:
-	MStatus compute(const MPlug& p, MDataBlock& b) override { if (!isInputPlug(p)) return MS::kUnknownParameter; compute({thisMObject(), b}); return MS::kSuccess; }
+	MStatus compute(const MPlug& p, MDataBlock& b) override { if (!isInputPlug(p)) return MS::kUnknownParameter; compute({ thisMObject(), b }); return MS::kSuccess; }
+};
+
+template<typename T>
+class TMPxDeformer : public MPxDeformerNode {
+public:
+	static void* creator() { return new T; }
+protected:
+	static void makePaintable(const char* nodeName) {
+		MGlobal::executeCommand(MString("makePaintable -attrType multiFloat -sm deformer ") + nodeName + " weights", true);
+	}
+	virtual MStatus deform(Meta b, MItGeometry& outputGeometry, const MMatrix& worldMatrix) = 0;
+private:
+	MStatus deform(MDataBlock& b, MItGeometry& outputGeometry, const MMatrix& worldMatrix, unsigned int multiIndex) override { return deform(Meta(thisMObject(), b, multiIndex), outputGeometry, worldMatrix); }
+};
+
+template<typename T, MFn::Type G>
+class TTypedMPxDeformer : public TMPxDeformer<T> {
+protected:
+	MObject inputGeometry(Meta& b) {
+		// MItGeometry is a copy of the input that will be written to the output. Therefore we can't write to the output directly, but only to to MItGeometry.
+		// TODO: Verify that MItGeometry can't just be ignored if we get a handle to the output plug
+		// MItGeometry is geometry-agnostic so we can't use it for polygon-specific deformers. Therefore we will get the input geometry as the right type.
+		MStatus status;
+		MArrayDataHandle inputGeometryArray = b.data.inputArrayValue(T::input, &status); CHECK_MSTATUS_AND_RETURN(status, MObject::kNullObj);
+		status = inputGeometryArray.jumpToElement(b.deformerMultiIndex); CHECK_MSTATUS_AND_RETURN(status, MObject::kNullObj);
+		MDataHandle inputGeometryArrayElement = inputGeometryArray.inputValue(&status); CHECK_MSTATUS_AND_RETURN(status, MObject::kNullObj);
+		MObject inputShape = inputGeometryArrayElement.child(T::inputGeom).asMesh();
+		if (inputShape == MObject::kNullObj || !inputShape.hasFn(G)) {
+			MGlobal::displayError("This deformer only works on specific geometry data, input is wrong type of shape.");
+			status = MS::kFailure;
+			return MObject::kNullObj;
+		}
+		return inputShape;
+	}
 };
 
 MStatus enumInitialize(MObject& dst, const MString& enumName, const std::vector<MString>& fieldNames, const std::vector<short> fieldIndices) {
@@ -168,14 +210,19 @@ template<typename T> MStatus setArray(Meta b, const MObject& o, const std::vecto
 template<typename T> MStatus initialize(MObject& dst, const char* name);
 template<typename T> MStatus initialize(MObject& dst, const char* name, std::vector<MObject>& dstChildren);
 
+#define TYPED_DEFORMER_BEGIN(N, TYPE) class N : public TTypedMPxDeformer<N, MFn::k##TYPE> { public: static MStatus initialize(); virtual MStatus deform(Meta b, MItGeometry& outputGeometry, const MMatrix& worldMatrix) override
+#define DEFORMER_BEGIN(N)             class N : public TMPxDeformer<N>                    { public: static MStatus initialize(); virtual MStatus deform(Meta b, MItGeometry& outputGeometry, const MMatrix& worldMatrix) override
+#define DEFORMER_END };
+
 #define NODE_BEGIN(N) class N : public TMPxNode<N> { public: static MStatus initialize(); protected: virtual bool isInputPlug(const MPlug& p) override; virtual void compute(Meta b) override
+#define NODE_END };
+
 #define INPUT(T, N) static MObject N##Attr; T N(Meta dataBlock);
 #define OUTPUT(T, N) static MObject N##Attr; void N##Set(Meta dataBlock, const T& value);
 #define INOUT(T, N) static MObject N##Attr; T N(Meta dataBlock); void N##Set(Meta dataBlock, const T& value);
 #define INPUT_ARRAY(T, N) static MObject N##Attr; int N##Size(Meta dataBlock); T N(Meta dataBlock, int index);
 #define OUTPUT_ARRAY(T, N) static MObject N##Attr; int N##Size(Meta dataBlock); void N##Set(Meta dataBlock, const std::vector<T>& value);
 #define INOUT_ARRAY(T, N) static MObject N##Attr; int N##Size(Meta dataBlock); T N(Meta dataBlock, int index); void N##Set(Meta dataBlock, const std::vector<T>& value);
-#define NODE_END };
 
 #define ENUM_BEGIN(N) enum class N {
 #define ENUM(N) N,

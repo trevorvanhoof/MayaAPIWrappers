@@ -199,5 +199,24 @@ NurbsCurve MatricesOnCurve::inputCurve(Meta dataBlock) { return getAttr<NurbsCur
 int MatricesOnCurve::dataSize(Meta dataBlock) { return arraySize(dataBlock, dataAttr); }
 MatrixOnCurve MatricesOnCurve::data(Meta dataBlock, int index) { return getArray<MatrixOnCurve>(dataBlock, dataAttr, _MatricesOnCurve_data_children, index); }
 void MatricesOnCurve::dataSet(Meta dataBlock, const std::vector<MatrixOnCurve>& value) { setArray<MatrixOnCurve>(dataBlock, dataAttr, _MatricesOnCurve_data_children, value); }
+MObject LaplacianSmooth::iterationCountAttr;
+MObject LaplacianSmooth::smoothAmountAttr;
+MStatus LaplacianSmooth::initialize() {
+    MStatus status;
 
-#define INITIALIZE_PLUGIN REGISTER_NODE(MyNode) REGISTER_NODE(MatricesOnCurve)
+    status = ::initialize<int>(iterationCountAttr, "iterationCount"); CHECK_MSTATUS_AND_RETURN_IT(status);
+    status = addAttribute(iterationCountAttr); CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    status = ::initialize<float>(smoothAmountAttr, "smoothAmount"); CHECK_MSTATUS_AND_RETURN_IT(status);
+    status = addAttribute(smoothAmountAttr); CHECK_MSTATUS_AND_RETURN_IT(status);
+
+    makePaintable("LaplacianSmooth");
+    return status;
+}
+
+
+int LaplacianSmooth::iterationCount(Meta dataBlock) { return getAttr<int>(dataBlock, iterationCountAttr); }
+
+float LaplacianSmooth::smoothAmount(Meta dataBlock) { return getAttr<float>(dataBlock, smoothAmountAttr); }
+
+#define INITIALIZE_PLUGIN REGISTER_NODE(MyNode) REGISTER_NODE(MatricesOnCurve) REGISTER_DEFORMER(LaplacianSmooth)
