@@ -34,6 +34,7 @@
 #include <maya/MPointArray.h>
 #include <maya/MItGeometry.h>
 #include <maya/MGlobal.h>
+#include <maya/MEulerRotation.h>
 
 #define DECL_MFN_MOBJECT(N) struct N { MObject obj; N(MObject obj) : obj(obj) {} operator MObject() { return obj; } operator const MObject&() const { return obj; } };
 

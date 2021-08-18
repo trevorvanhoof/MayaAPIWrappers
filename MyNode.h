@@ -155,7 +155,7 @@ private:
 		// so vertices don't need to be evaluated in order (allowing parallelization).
 		
 		MFnMesh inputGeometryFn(inputGeometryObj);
-		int vertexCount = inputGeometryFn.numVertices();
+		unsigned int vertexCount = inputGeometryFn.numVertices();
 		// Data out of date?
 		if (adjacentVertexCounts.length() != vertexCount) {
 			// Allocate what we know we'll need

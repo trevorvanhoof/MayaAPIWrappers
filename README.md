@@ -6,7 +6,6 @@ This is a work in progress, the following documentation may be more complete tha
 
 #### TODO
 
-- MPxDeformer: 
 - MPxLocator: 
 - MPxCommand: This needs the whole API design to be done
 - MFnTypedAttribute: Attributes of type kPlugin & kPluginGeometry are not supported yet

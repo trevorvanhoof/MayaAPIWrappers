@@ -122,10 +122,12 @@ def processCompound(compoundType):
     children.emplace_back();
     {
         MObject& attr = children[children.size() - 1];
-        status = initialize<%s>(attr, "%s"); CHECK_MSTATUS_AND_RETURN_IT(status);%s
+        MString childName = name;
+        childName += "_%s";
+        status = initialize<%s>(attr, childName.asChar()); CHECK_MSTATUS_AND_RETURN_IT(status);%s
         status = fn.addChild(attr); CHECK_MSTATUS_AND_RETURN_IT(status);
     }
-""" % (attrType, attrName, extra))
+""" % (attrName, attrType, extra))
     code.append("""
     return status;
 }""")
@@ -301,6 +303,10 @@ def main():
     root = os.path.abspath('.')  # TODO: sys.argv?
     output = 'generated.inc'
     with open(output, 'w') as fh:
+        registerPlugin = []
+        enumNames = []
+        compoundTypes = []
+        codeBlocks = []
         for path in walk(root):
             if os.path.splitext(path)[1].lower() != '.h':
                 continue
@@ -308,8 +314,6 @@ def main():
                 continue
             fh.write('#include "%s"\n\n' % os.path.relpath(path, root))
             nodeCode, enumCode, compoundCode, deformerCode, typedDeformerCode = scan(path)
-            enumNames = []
-            compoundTypes = []
             for code in enumCode:
                 enumName, enumOptions = scanEnum(code)
                 enumNames.append(enumName)
@@ -317,10 +321,11 @@ def main():
             for code in compoundCode:
                 # compounds can reference other compounds, which we need before we can generate any code
                 compoundTypes.append(scanCompound(code))
-            for compoundType in compoundTypes:
-                fh.write(processCompound(compoundType))
-            registerPlugin = []
-            for grpId, grp in enumerate((nodeCode, deformerCode, typedDeformerCode)):
+            codeBlocks.append((nodeCode, deformerCode, typedDeformerCode))
+        for compoundType in compoundTypes:
+            fh.write(processCompound(compoundType))
+        for codeBlock in codeBlocks:
+            for grpId, grp in enumerate(codeBlock):
                 isDeformer = grpId in (1, 2)
                 for code in grp:
                     nodeName, nodeAttrs = scanNode(code, set(name for (name, _) in compoundTypes))
@@ -329,8 +334,8 @@ def main():
                     else:
                         registerPlugin.append('REGISTER_NODE(%s)' % nodeName)
                     fh.write(processNode(nodeName, nodeAttrs, isDeformer))
-            if registerPlugin:
-                fh.write('\n#define INITIALIZE_PLUGIN %s' % ' '.join(registerPlugin))
+        if registerPlugin:
+            fh.write('\n#define INITIALIZE_PLUGIN %s' % ' '.join(registerPlugin))
 
 
 if __name__ == '__main__':

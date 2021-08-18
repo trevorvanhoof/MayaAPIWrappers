@@ -326,6 +326,7 @@ template<> MStatus initialize<Message>(MObject& dst, const char* name) {
 	return status;
 }
 
+#pragma warning(disable:4100)
 template<> void set<Message>(MDataHandle& element, const Message& value) {
 	#ifdef _DEBUG
 	__debugbreak(); // It is not valid to set message attributes, nothing will happen.
@@ -390,13 +391,13 @@ IMPL_TATTR_B(NId)
 #undef IMPL_TATTR_B
 
 /*
-kPlugin 	Plugin Blind Data, use MFnPluginData to extract the node data.
-kPluginGeometry 	Plugin Geometry, use MFnGeometryData to extract the node data.
+kPlugin 		Plugin Blind Data, use MFnPluginData to extract the node data.
+kPluginGeometry Plugin Geometry, use MFnGeometryData to extract the node data.
 
-kString 	String, use MFnStringData to extract the node data.
+kString 		String, use MFnStringData to extract the node data.
 kStringArray 	String Array, use MFnStringArrayData to extract the node data.
 kDoubleArray 	Double Array, use MFnDoubleArrayData to extract the node data.
-kIntArray 	Int Array, use MFnIntArrayData to extract the node data.
+kIntArray 		Int Array, use MFnIntArrayData to extract the node data.
 kPointArray 	Point Array, use MFnPointArrayData to extract the node data.
 kVectorArray 	Vector Array, use MFnVectorArrayData to extract the node data.
 */
