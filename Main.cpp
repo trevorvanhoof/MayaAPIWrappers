@@ -417,6 +417,7 @@ std::vector<MString> registeredCommands;
 
 #define REGISTER_NODE(T) status = fn.registerNode(#T, pluginIdCursor, T::creator, T::initialize); ++pluginIdCursor; CHECK_MSTATUS_AND_RETURN_IT(status);
 #define REGISTER_DEFORMER(T) status = fn.registerNode(#T, pluginIdCursor, T::creator, T::initialize, MPxNode::kDeformerNode); ++pluginIdCursor; CHECK_MSTATUS_AND_RETURN_IT(status);
+#define REGISTER_LOCATOR(T) status = fn.registerNode(#T, pluginIdCursor, T::creator, T::initialize, MPxNode::kLocatorNode, "drawdb/geometry/"#T); ++pluginIdCursor; CHECK_MSTATUS_AND_RETURN_IT(status); status = MDrawRegistry::registerDrawOverrideCreator("drawdb/geometry/"#T, #T, T::DrawOverride::creator); CHECK_MSTATUS_AND_RETURN_IT(status);
 
 __declspec(dllexport) MStatus initializePlugin(MObject pluginObj) {
 	MStatus status;
