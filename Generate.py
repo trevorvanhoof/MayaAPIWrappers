@@ -24,8 +24,8 @@ def findFirstOf(data, options, startAt):
 def scan(path):
     with open(path, 'r') as fh:
         code = fh.read()
-    startTokens = ('NODE_BEGIN(', 'ENUM_BEGIN(', 'COMPOUND_BEGIN(', 'DEFORMER_BEGIN(', 'TYPED_DEFORMER_BEGIN(')
-    endTokens = ('NODE_END', 'ENUM_END', 'COMPOUND_END', 'DEFORMER_END', 'DEFORMER_END')
+    startTokens = ('NODE_BEGIN(', 'ENUM_BEGIN(', 'COMPOUND_BEGIN(', 'DEFORMER_BEGIN(', 'TYPED_DEFORMER_BEGIN(', 'LOCATOR_START(', 'COMPLEX_LOCATOR_START(')
+    endTokens = ('NODE_END', 'ENUM_END', 'COMPOUND_END', 'DEFORMER_END', 'DEFORMER_END', 'LOCATOR_END', 'LOCATOR_END')
     output = tuple([] for _ in range(len(startTokens)))
     cursor = 0
     while True:
@@ -177,13 +177,16 @@ template<> void set<%s>(MDataHandle& element, const MObject* objects, const %s& 
 
 
 def scanNode(code, compoundTypeNames):
+    # get the node name from the "_BEGIN(nodeName)" structure
     cursor = code.find('(')
     assert cursor != -1
     tmp = code.find(')', cursor + 1)
     assert tmp != -1
     nodeName = code[cursor + 1:tmp]
-    # for deformers we must strip additional arguments inside the macro
+    # for deformers and locators we must strip additional arguments inside the macro
     nodeName = nodeName.split(',')[0].strip()
+    
+    # find attributes defined in the node block
     nodeAttrs = []
     tokens = ('INPUT(', 'INOUT(', 'OUTPUT(', 'INPUT_ARRAY(', 'INOUT_ARRAY(', 'OUTPUT_ARRAY(')
     for ln in code.splitlines():
@@ -211,7 +214,7 @@ def scanNode(code, compoundTypeNames):
     return nodeName, nodeAttrs
 
 
-def processNode(nodeName, nodeAttrs, isDeformer=False):
+def processNode(nodeName, nodeAttrs, isDeformer=False, isLocator=False):
     code = []
     inputNames = []
     outputNames = []
@@ -227,7 +230,7 @@ def processNode(nodeName, nodeAttrs, isDeformer=False):
         if isCompound:
             code.append('std::vector<MObject> _%s_%s_children;' % (nodeName, attrName))
 
-    if not isDeformer:
+    if not isDeformer and not isLocator:
         if not inputNames:
             code.append("""
 bool %s::isInputPlug(const MPlug& p) {
@@ -306,7 +309,7 @@ bool %s::isInputPlug(const MPlug& p) {
             compoundArgs = ', _%s_%s_children' % (nodeName, attrName)
         if isArray:
             code.append('int %s::%sSize(Meta dataBlock) { return arraySize(dataBlock, %sAttr); }' % (nodeName, attrName, attrName))
-            if not isOut:
+            if not isOut:  # NOTE: We set "False, False" for INOUT so we must check the opposite, NOT OUT means IN
                 code.append('%s %s::%s(Meta dataBlock, int index) { return getArray<%s>(dataBlock, %sAttr%s, index); }' % (attrType, nodeName, attrName, attrType, attrName, compoundArgs))
             if not isIn:
                 code.append('void %s::%sSet(Meta dataBlock, const std::vector<%s>& value) { setArray<%s>(dataBlock, %sAttr%s, value); }' % (nodeName, attrName, attrType, attrType, attrName, compoundArgs))
@@ -316,6 +319,18 @@ bool %s::isInputPlug(const MPlug& p) {
             if not isIn:
                 code.append('void %s::%sSet(Meta dataBlock, const %s& value) { setAttr<%s>(dataBlock, %sAttr%s, value); }' % (nodeName, attrName, attrType, attrType, attrName, compoundArgs))
         code.append('')
+
+    if isLocator:
+        # Generate MUserData
+        code.append('\nclass %sUserData {' % nodeName)
+        for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
+            if not isOut:  # NOTE: We set "False, False" for INOUT so we must check the opposite, NOT OUT means IN
+                code.append('\t%s %s;' % (attrType, attrName))
+        code.append('}\n')
+        # Generate copyInputs
+        code.append('template<> MUserData* TMPxLocator<%s, %sUserData>::compute(Meta b, %sUserData& dst) {' % (nodeName, nodeName, nodeName))
+        for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
+            code.append('\tdst.%s = %s(b);')
     return '\n'.join(code)
 
 
@@ -333,7 +348,7 @@ def main():
             if path.lower().replace('/', '\\').endswith('\\core.h'):
                 continue
             fh.write('#include "%s"\n\n' % os.path.relpath(path, root))
-            nodeCode, enumCode, compoundCode, deformerCode, typedDeformerCode = scan(path)
+            nodeCode, enumCode, compoundCode, deformerCode, typedDeformerCode, locatorCode, complexLocatorCode = scan(path)
             for code in enumCode:
                 enumName, enumOptions = scanEnum(code)
                 enumNames.append(enumName)
@@ -341,20 +356,23 @@ def main():
             for code in compoundCode:
                 # compounds can reference other compounds, which we need before we can generate any code
                 compoundTypes.append(scanCompound(code))
-            codeBlocks.append((nodeCode, deformerCode, typedDeformerCode))
+            codeBlocks.append((nodeCode, deformerCode, typedDeformerCode, locatorCode, complexLocatorCode))
         compoundTypeNames = {name: len(members) for (name, members) in compoundTypes}
         for compoundType in compoundTypes:
             fh.write(processCompound(compoundType, compoundTypeNames))
         for codeBlock in codeBlocks:
             for grpId, grp in enumerate(codeBlock):
                 isDeformer = grpId in (1, 2)
+                isLocator = grpId in (3, 4)
                 for code in grp:
                     nodeName, nodeAttrs = scanNode(code, compoundTypeNames)
-                    if isDeformer:
+                    if isLocator:
+                        registerPlugin.append('REGISTER_LOCATOR(%s)' % nodeName)
+                    elif isDeformer:
                         registerPlugin.append('REGISTER_DEFORMER(%s)' % nodeName)
                     else:
                         registerPlugin.append('REGISTER_NODE(%s)' % nodeName)
-                    fh.write(processNode(nodeName, nodeAttrs, isDeformer))
+                    fh.write(processNode(nodeName, nodeAttrs, isDeformer, isLocator))
         if registerPlugin:
             fh.write('\n#define INITIALIZE_PLUGIN %s' % ' '.join(registerPlugin))
 
