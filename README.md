@@ -6,6 +6,7 @@ This is a work in progress, the following documentation may be more complete tha
 
 #### TODO
 
+- MPxLocator copies all attributes to a generated user data, we want to replace this to only copy the inputs + custom USERDATA_ATTR macro attributes (which are not real maya attributes) so that compute() can calcualte and write directly to user-defined members of MUserData.
 - MPxCommand: This needs the whole API design to be done
 - MFnTypedAttribute: Attributes of type kPlugin & kPluginGeometry are not supported yet
 - Nested compounds are not supported yet: this may be as simple as passing in the right object array in Generate.py

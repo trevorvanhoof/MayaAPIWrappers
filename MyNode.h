@@ -187,7 +187,7 @@ DEFORMER_END
 
 
 
-LOCATOR_BEGIN(DemoLocator) 
+LOCATOR_BEGIN(DemoLocator) {/*empty compute*/}
 INPUT_ARRAY(FVec3, points)
 INPUT_ARRAY(int, triangles)
 LOCATOR_DRAW(DemoLocator)  {

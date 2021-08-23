@@ -230,7 +230,7 @@ def processNode(nodeName, nodeAttrs, isDeformer=False, isLocator=False):
         if isCompound:
             code.append('std::vector<MObject> _%s_%s_children;' % (nodeName, attrName))
 
-    if not isDeformer and not isLocator:
+    if not isDeformer:
         if not inputNames:
             code.append("""
 bool %s::isInputPlug(const MPlug& p) {
@@ -324,13 +324,15 @@ bool %s::isInputPlug(const MPlug& p) {
         # Generate MUserData
         code.append('\nclass %sUserData {' % nodeName)
         for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
-            if not isOut:  # NOTE: We set "False, False" for INOUT so we must check the opposite, NOT OUT means IN
-                code.append('\t%s %s;' % (attrType, attrName))
+            # if not isOut:  # NOTE: We set "False, False" for INOUT so we must check the opposite, NOT OUT means IN
+            code.append('\t%s %s;' % (attrType, attrName))
         code.append('}\n')
         # Generate copyInputs
-        code.append('template<> MUserData* TMPxLocator<%s, %sUserData>::compute(Meta b, %sUserData& dst) {' % (nodeName, nodeName, nodeName))
+        code.append('template<> MUserData* TMPxLocator<%s, %sUserData>::copyInputs(Meta b, %sUserData& dst) {' % (nodeName, nodeName, nodeName))
         for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
+            # if not isOut:
             code.append('\tdst.%s = %s(b);')
+        code.append('}')
         # Generate function dependent on the user data subclass
         code.append("""template <> MStatus TMPxLocator<%s, %sUserData>::compute(const MPlug& p, MDataBlock& b) override {
 	if (!isInputPlug(p)) return MS::kUnknownParameter;
@@ -340,7 +342,7 @@ bool %s::isInputPlug(const MPlug& p) {
 	MUserData* old = __locatorUserDataMap[uuid];
 	if (!old) __locatorUserDataMap[uuid] = new %sUserData;
 	copyInputs({ thisMObject(), b }, *static_cast<%sUserData*>(old));
-	return MS::kSuccess;
+	compute({ thisMObject(), b }); return MS::kSuccess;
 }""" % (nodeName, nodeName, nodeName, nodeName))
     return '\n'.join(code)
 

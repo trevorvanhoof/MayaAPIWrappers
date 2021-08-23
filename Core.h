@@ -130,7 +130,8 @@ class TMPxLocator : public MPxLocatorNode {
 public:
 	static void* creator() { return new T; }
 protected:
-	virtual void compute(Meta b, TUserData& userData) = 0;
+	virtual void compute(Meta b) = 0;
+	virtual void copyInputs(Meta b, TUserData& userData) = 0;
 	virtual bool isInputPlug(const MPlug& p) = 0;
 private:
 	MStatus compute(const MPlug& p, MDataBlock& b) override;
@@ -325,7 +326,7 @@ template<typename T> MStatus initialize(MObject& dst, const char* name, std::vec
 
 /* API can be one of: None, OpenGL, DirectX11, OpenGLCoreProfile, AllDevices */
 #define COMPLEX_LOCATOR_BEGIN(N, API)  class N##UserData; class N : public TMPxLocatorComplex<N, N##UserData, MHWRender::DrawAPI::k##API> { public: static MStatus initialize();
-#define LOCATOR_BEGIN(N) class N##UserData; class N : public TMPxLocator<N, N##UserData> { public: static MStatus initialize();
+#define LOCATOR_BEGIN(N) class N##UserData; class N : public TMPxLocator<N, N##UserData> { public: static MStatus initialize(); virtual void compute(Meta b) override
 #define LOCATOR_DRAW(N) }; template <> void TMPxLocator<N, N##UserData>::DrawOverride::draw(const N##UserData& attributeValues)
 // This is here to make parsing easier
 #define LOCATOR_END 
