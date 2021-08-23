@@ -35,6 +35,9 @@
 #include <maya/MItGeometry.h>
 #include <maya/MGlobal.h>
 #include <maya/MEulerRotation.h>
+#include <maya/MViewport2Renderer.h>
+#include <maya/MPxLocatorNode.h>
+#include <maya/MPxDrawOverride.h>
 
 #define DECL_MFN_MOBJECT(N) struct N { MObject obj; N(MObject obj) : obj(obj) {} operator MObject() { return obj; } operator const MObject&() const { return obj; } };
 
@@ -91,6 +94,102 @@ protected:
 		}
 		return inputShape;
 	}
+};
+
+#include <unordered_map>
+#ifdef _MSC_VER
+#pragma pack(push, 1)
+struct uuid { unsigned int a; unsigned int b; unsigned int c; unsigned int d; };
+#pragma pack(pop)
+#else
+struct __attribute__((packed)) uuid { unsigned int a; unsigned int b; unsigned int c; unsigned int d; };
+#endif
+namespace std {
+	template <> struct hash<uuid> {
+		std::size_t operator()(const uuid& k) const {
+			std::size_t a = std::hash<unsigned int>()(k.a);
+			std::size_t b = std::hash<unsigned int>()(k.b);
+			std::size_t c = std::hash<unsigned int>()(k.c);
+			std::size_t d = std::hash<unsigned int>()(k.d);
+			a ^= b + 0x9e3779b9 + (a << 6) + (a >> 2);
+			a ^= c + 0x9e3779b9 + (a << 6) + (a >> 2);
+			a ^= d + 0x9e3779b9 + (a << 6) + (a >> 2);
+			return a;
+		}
+	};
+}
+std::unordered_map<uuid, MUserData*> __locatorUserDataMap;
+
+template<typename T, typename TUserData>
+class TMPxLocator : public MPxLocatorNode {
+public:
+	static void* creator() { return new T; }
+protected:
+	virtual void compute(Meta b, TUserData& userData) = 0;
+	virtual bool isInputPlug(const MPlug& p) = 0;
+private:
+	MStatus compute(const MPlug& p, MDataBlock& b) override { 
+		if (!isInputPlug(p)) return MS::kUnknownParameter; 
+		uuid uuid;
+		MUuid guid = MFnDependencyNode(thisMObject()).uuid();
+		guid.get((unsigned char*)&uuid);
+		MUserData* old = __locatorUserDataMap[guid];
+		if(!old) __locatorUserDataMap[guid] = new TUserData;
+		copyInputs({ thisMObject(), b }, *static_cast<TUserData*>(old));
+		return MS::kSuccess;
+	}
+public:
+	/*
+	For viewport 2 locators always need to have a DrawOverride,
+	I realized you can declare child classes in templates so this generates the bulk for free!
+	Inheritance is a bit weird though...
+
+	class TestUserData; // we must forward declare
+	class Test : public TMPxLocator<Test, TestUserData> {} // we must pass in class names
+
+	This makes Test inherit from an "instantation of our template"
+	That that means that the compiler will now generate a class named "TMPxLocator<Test, TestUserData>" for us.
+	That class in turn is missing implementations for prepareForDraw and draw.
+
+	Instead of what you normally do (inherit abstract functions and implement them in the subclass)
+	we generate a nested class that contains unfinished functions, we have to implement them on the generated class.
+	So the linker may complain "no implementation for Test::draw", but this is WRONG:
+		void Test::draw(...
+	You have to implement the template instance:
+		template<> void TMPxLocator<Test, TestUserData>::draw(...
+	*/
+	class DrawOverride : public MPxDrawOverride {
+	private:
+		static void _draw(const MHWRender::MDrawContext& context, const MUserData* data) {}
+	public:
+		DrawOverride(const MObject& obj) : MPxDrawOverride(obj, DrawOverride::_draw) {}
+		static MPxDrawOverride* creator(const MObject& obj) { return new DrawOverride(obj); }
+		virtual MHWRender::DrawAPI supportedDrawAPIs() const override { return MHWRender::DrawAPI::kAllDevices; }
+		virtual bool hasUIDrawables() const override { return true; }
+		virtual void addUIDrawables(const MDagPath& objPath, MUIDrawManager& drawManager, const MFrameContext& frameContext, const MUserData* inData) override { if (inData == nullptr) return; draw(*static_cast<const TUserData*>(inData)); }
+		virtual MUserData* prepareForDraw(const MDagPath& objPath, const MDagPath& cameraPath, const MFrameContext& frameContext, MUserData* oldData) override { return __locatorUserDataMap[guid]; };
+		void draw(const TUserData& attributeValues);
+	};
+};
+
+// Very similar to the other locator but doesn't use UIDrawables and only renders in sp0ecified Draw API. 
+// You can use raw graphics API calls here if you safely ifdef guard them.
+template<typename T, typename TUserData, MHWRender::DrawAPI drawAPIs>
+class TMPxLocatorComplex : public MPxLocatorNode {
+public:
+	static void* creator() { return new T; }
+
+	class DrawOverride : public MPxDrawOverride {
+	private:
+		static void _draw(const MHWRender::MDrawContext& context, const MUserData* inData) { if (inData == nullptr) return; draw(*static_cast<const TUserData*>(inData)); }
+	public:
+		DrawOverride(const MObject& obj) : MPxDrawOverride(obj, DrawOverride::_draw) {}
+		static MPxDrawOverride* creator(const MObject& obj) { return new DrawOverride(obj); }
+		virtual MHWRender::DrawAPI supportedDrawAPIs() const override { return drawAPIs; }
+		virtual bool hasUIDrawables() const override { return false; }
+		virtual MUserData* prepareForDraw(const MDagPath& objPath, const MDagPath& cameraPath, const MFrameContext& frameContext, MUserData* oldData) override;
+		void draw(const TUserData& attributeValues);
+	};
 };
 
 MStatus enumInitialize(MObject& dst, const MString& enumName, const std::vector<MString>& fieldNames, const std::vector<short> fieldIndices) {
@@ -220,6 +319,13 @@ template<typename T> MStatus initialize(MObject& dst, const char* name, std::vec
 
 #define NODE_BEGIN(N) class N : public TMPxNode<N> { public: static MStatus initialize(); protected: virtual bool isInputPlug(const MPlug& p) override; virtual void compute(Meta b) override
 #define NODE_END };
+
+/* API can be one of: None, OpenGL, DirectX11, OpenGLCoreProfile, AllDevices */
+#define COMPLEX_LOCATOR_BEGIN(N, API)  class N##UserData; class N : public TMPxLocatorComplex<N, N##UserData, MHWRender::DrawAPI::k##API> { public: static MStatus initialize();
+#define LOCATOR_BEGIN(N) class N##UserData; class N : public TMPxLocator<N, N##UserData> { public: static MStatus initialize();
+#define LOCATOR_DRAW(N) }; template <> void TMPxLocator<N, N##UserData>::DrawOverride::draw(const N##UserData& attributeValues)
+// This is here to make parsing easier
+#define LOCATOR_END
 
 #define INPUT(T, N) static MObject N##Attr; T N(Meta dataBlock);
 #define OUTPUT(T, N) static MObject N##Attr; void N##Set(Meta dataBlock, const T& value);

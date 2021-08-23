@@ -6,10 +6,10 @@ This is a work in progress, the following documentation may be more complete tha
 
 #### TODO
 
-- MPxLocator: 
 - MPxCommand: This needs the whole API design to be done
 - MFnTypedAttribute: Attributes of type kPlugin & kPluginGeometry are not supported yet
 - Nested compounds are not supported yet: this may be as simple as passing in the right object array in Generate.py
+- Move things into a namespace
 
 ---
 

@@ -184,3 +184,12 @@ private:
 		}
 	}
 DEFORMER_END
+
+
+
+LOCATOR_BEGIN(DemoLocator) 
+INPUT_ARRAY(FVec3, points)
+INPUT_ARRAY(int, triangles)
+LOCATOR_DRAW(DemoLocator)  {
+}
+LOCATOR_END
