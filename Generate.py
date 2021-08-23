@@ -12,7 +12,8 @@ def findFirstOf(data, options, startAt):
     resultI = -1
     for i, option in enumerate(options):
         index = data.find(option, startAt)
-        if index == -1: continue
+        if index == -1:
+            continue
         if index < result:
             result = index
             resultI = i
@@ -165,17 +166,17 @@ def scanNode(code, compoundTypeNames):
     nodeName = code[cursor + 1:tmp]
     # for deformers and locators we must strip additional arguments inside the macro
     nodeName = nodeName.split(',')[0].strip()
-    
+
     # find attributes defined in the node block
     nodeAttrs = []
     tokens = ('INPUT(', 'INOUT(', 'OUTPUT(', 'INPUT_ARRAY(', 'INOUT_ARRAY(', 'OUTPUT_ARRAY(')
     for ln in code.splitlines():
         ln = ln.strip()
-        for token in tokens: 
+        for token in tokens:
             if ln.startswith(token):
                 break
-        else: 
-            continue # There might be some more code inlined
+        else:
+            continue  # There might be some more code inlined
         assert ln.endswith(')')
         ln = ln.rstrip(')')
         isArray = token.endswith('_ARRAY(')
@@ -231,7 +232,7 @@ bool %s::isInputPlug(const MPlug& p) {
         if isCompound:
             args = ', _%s_%s_children' % (nodeName, attrName)
         code.append('    status = ::initialize<%s>(%sAttr, "%s"%s); CHECK_MSTATUS_AND_RETURN_IT(status);' % (
-        attrType, attrName, attrName, args))
+            attrType, attrName, attrName, args))
         if isArray:
             code.append('    status = MFnAttribute(%sAttr).setArray(true); CHECK_MSTATUS_AND_RETURN_IT(status);' % attrName)
         code.append('    status = addAttribute(%sAttr); CHECK_MSTATUS_AND_RETURN_IT(status);\n' % attrName)
@@ -251,7 +252,7 @@ bool %s::isInputPlug(const MPlug& p) {
                     continue
 
             code.append('    status = attributeAffects(%sAttr, %sAttr); CHECK_MSTATUS_AND_RETURN_IT(status);' % (
-            attrName2, attrName))
+                attrName2, attrName))
 
             if isCompound:
                 # The input affects each of the output's chidlren
@@ -289,7 +290,7 @@ bool %s::isInputPlug(const MPlug& p) {
             compoundArgs = ', _%s_%s_children' % (nodeName, attrName)
         if isArray:
             code.append('int %s::%sSize(Meta dataBlock) { return arraySize(dataBlock, %sAttr); }' % (nodeName, attrName, attrName))
-            if not isOut: # NOTE: We set "False, False" for INOUT so we must check the opposite, NOT OUT means IN
+            if not isOut:  # NOTE: We set "False, False" for INOUT so we must check the opposite, NOT OUT means IN
                 code.append('%s %s::%s(Meta dataBlock, int index) { return getArray<%s>(dataBlock, %sAttr%s, index); }' % (attrType, nodeName, attrName, attrType, attrName, compoundArgs))
             if not isIn:
                 code.append('void %s::%sSet(Meta dataBlock, const std::vector<%s>& value) { setArray<%s>(dataBlock, %sAttr%s, value); }' % (nodeName, attrName, attrType, attrType, attrName, compoundArgs))
@@ -302,13 +303,13 @@ bool %s::isInputPlug(const MPlug& p) {
 
     if isLocator:
         # Generate MUserData
-        code.append('\nclass %sUserData {' % nodeName
+        code.append('\nclass %sUserData {' % nodeName)
         for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
-            if not isOut: # NOTE: We set "False, False" for INOUT so we must check the opposite, NOT OUT means IN
+            if not isOut:  # NOTE: We set "False, False" for INOUT so we must check the opposite, NOT OUT means IN
                 code.append('\t%s %s;' % (attrType, attrName))
         code.append('}\n')
         # Generate copyInputs
-        code.append('template<> MUserData* TMPxLocator<%s, %sUserData>::compute(Meta b, %sUserData& dst) {' % (nodeName, nodeName, nodeName)
+        code.append('template<> MUserData* TMPxLocator<%s, %sUserData>::compute(Meta b, %sUserData& dst) {' % (nodeName, nodeName, nodeName))
         for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
             code.append('\tdst.%s = %s(b);')
     return '\n'.join(code)

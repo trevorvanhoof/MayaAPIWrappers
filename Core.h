@@ -36,6 +36,8 @@
 #include <maya/MGlobal.h>
 #include <maya/MEulerRotation.h>
 #include <maya/MViewport2Renderer.h>
+#include <maya/MPxLocatorNode.h>
+#include <maya/MPxDrawOverride.h>
 
 #define DECL_MFN_MOBJECT(N) struct N { MObject obj; N(MObject obj) : obj(obj) {} operator MObject() { return obj; } operator const MObject&() const { return obj; } };
 
