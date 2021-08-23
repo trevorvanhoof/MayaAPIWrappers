@@ -331,6 +331,17 @@ bool %s::isInputPlug(const MPlug& p) {
         code.append('template<> MUserData* TMPxLocator<%s, %sUserData>::compute(Meta b, %sUserData& dst) {' % (nodeName, nodeName, nodeName))
         for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
             code.append('\tdst.%s = %s(b);')
+        # Generate function dependent on the user data subclass
+        code.append("""template <> MStatus TMPxLocator<%s, %sUserData>::compute(const MPlug& p, MDataBlock& b) override {
+	if (!isInputPlug(p)) return MS::kUnknownParameter;
+	Uuid uuid;
+	MUuid guid = MFnDependencyNode(thisMObject()).uuid();
+	guid.get((unsigned char*)&uuid);
+	MUserData* old = __locatorUserDataMap[uuid];
+	if (!old) __locatorUserDataMap[uuid] = new %sUserData;
+	copyInputs({ thisMObject(), b }, *static_cast<%sUserData*>(old));
+	return MS::kSuccess;
+}""" % (nodeName, nodeName, nodeName, nodeName))
     return '\n'.join(code)
 
 
