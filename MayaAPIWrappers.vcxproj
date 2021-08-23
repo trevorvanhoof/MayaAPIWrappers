@@ -103,6 +103,8 @@
   <ItemGroup>
     <ClInclude Include="Core.h" />
     <ClInclude Include="MyNode.h" />
+    <ClInclude Include="rigSystemRigOutputnode.h" />
+    <ClInclude Include="rigSystemVariableFKNode.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

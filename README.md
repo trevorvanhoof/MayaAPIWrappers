@@ -200,7 +200,7 @@ Calling setters on output attributes of type message is not permitted.
 
 #### Omissions
 We have omitted 2 number types: `byte` and `addr`, they can not be set using MDataHandle.
-We have omitted types that would normally use: MFnGenericAttribute, MFnLightDataAttribute.
+We have omitted types that would normally use: MFnGenericAttribute, MFnLightDataAttribute, MRampAttribute.
 We have omitted kDynArrayAttrs as it's just a dictionary of typed array attributes and you can achieve the same thing more safely by using multiple attributes instead.
 
 #### Renames
@@ -222,7 +222,7 @@ _`long` is another name for `int` so for `long2` etc you can also use `IVec2`_
 
 #### DIY
 
-We may not have full coverage of builtin data types, so here is hwo to add them:
+We may not have full coverage of builtin data types, so here is how to add them:
 
 **NOTE:** if you want to deal with MFn* objects, be sure to read the section after this too!
 

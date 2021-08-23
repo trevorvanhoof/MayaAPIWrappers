@@ -35,6 +35,12 @@
     <ClInclude Include="MyNode.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="rigSystemVariableFKNode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="rigSystemRigOutputnode.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">

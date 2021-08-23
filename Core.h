@@ -107,21 +107,28 @@ MStatus enumInitialize(MObject& dst, const MString& enumName, const std::vector<
 unsigned int arraySize(Meta b, const MObject& o);
 MDataHandle arrayInputElement(Meta b, const MObject& o, unsigned int index, MStatus& status);
 
+template<typename T> T get(MDataHandle& element);
+template<typename T> T get(MDataHandle& element, const MObject* compoundChildren);
+template<typename T> void set(MDataHandle& element, const T& value);
+template<typename T> void set(MDataHandle& element, const MObject* compoundChildren, const T& value);
+
 template<typename T> std::vector<T> get(MArrayDataHandle& element) {
 	std::vector<T> result;
 	result.reserve(element.elementCount());
 	for (unsigned int i = 0; i < element.elementCount(); ++i) {
 		element.jumpToArrayElement(i);
-		result.push_back(get<T>(element.inputValue()));
+		MDataHandle elementHandle = element.inputValue();
+		result.push_back(get<T>(elementHandle));
 	}
 	return result;
 }
-template<typename T> T get(MArrayDataHandle& element, const std::vector<MObject>& compoundChildren) {
+template<typename T> T get(MArrayDataHandle& element, const MObject* compoundChildren) {
 	std::vector<T> result;
 	result.reserve(element.elementCount());
 	for (unsigned int i = 0; i < element.elementCount(); ++i) {
 		element.jumpToArrayElement(i);
-		result.push_back(get<T>(element.inputValue(), compoundChildren));
+		MDataHandle elementHandle = element.inputValue();
+		result.push_back(get<T>(elementHandle, compoundChildren));
 	}
 	return result;
 }
@@ -134,7 +141,7 @@ template<typename T> void set(MArrayDataHandle& element, const std::vector<T>& v
 	}
 	element.set(builder);
 }
-template<typename T> void set(MArrayDataHandle& element, const std::vector<MObject>& compoundChildren, const T& value) {
+template<typename T> void set(MArrayDataHandle& element, const MObject* compoundChildren, const T& value) {
 	MStatus status;
 	MArrayDataBuilder builder = element.builder(&status); CHECK_MSTATUS(status); if (MStatus::kSuccess != status) return;
 	for (unsigned int index = 0; index < (unsigned int)value.size(); ++index) {
@@ -144,14 +151,10 @@ template<typename T> void set(MArrayDataHandle& element, const std::vector<MObje
 	element.set(builder);
 }
 
-template<typename T> T get(MDataHandle& element);
-template<typename T> T get(MDataHandle& element, const std::vector<MObject>& compoundChildren);
-template<typename T> void set(MDataHandle& element, const T& value);
-template<typename T> void set(MDataHandle& element, const std::vector<MObject>& compoundChildren, const T& value);
 template<typename T> T fallback() { return T(); } // fallback value in case of errors
 
 template<typename T> T getAttr(Meta b, const MObject& o) { MDataHandle h = b.data.inputValue(o); return get<T>(h); }
-template<typename T> T getAttr(Meta b, const MObject& o, const std::vector<MObject>& compoundChildren) { MDataHandle h = b.data.inputValue(o); return get<T>(h, compoundChildren); }
+template<typename T> T getAttr(Meta b, const MObject& o, const std::vector<MObject>& compoundChildren) { MDataHandle h = b.data.inputValue(o); return get<T>(h, &compoundChildren[0]); }
 
 template<typename T> T getArray(Meta b, const MObject& o, int index) {
 	MStatus status;
@@ -165,7 +168,7 @@ template<typename T> T getArray(Meta b, const MObject& o, const std::vector<MObj
 	MDataHandle element = arrayInputElement(b, o, index, status);
 	if (status != MS::kSuccess) // element is not valid
 		return fallback<T>();
-	return get<T>(element, compoundChildren);
+	return get<T>(element, &compoundChildren[0]);
 }
 
 template<typename T> MStatus setAttr(Meta b, const MObject& o, const T& value) {
@@ -178,7 +181,7 @@ template<typename T> MStatus setAttr(Meta b, const MObject& o, const T& value) {
 template<typename T> MStatus setAttr(Meta b, const MObject& o, const std::vector<MObject>& compoundChildren, const T& value) {
 	MStatus status;
 	MDataHandle element = b.data.outputValue(o, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
-	set<T>(element, compoundChildren, value);
+	set<T>(element, &compoundChildren[0], value);
 	return status;
 }
 
@@ -202,7 +205,7 @@ template<typename T> MStatus setArray(Meta b, const MObject& o, const std::vecto
 	MArrayDataBuilder builder = handle.builder(&status); CHECK_MSTATUS_AND_RETURN_IT(status);
 	for (unsigned int index = 0; index < (unsigned int)value.size(); ++index) {
 		element = builder.addElement(index, &status); CHECK_MSTATUS_AND_RETURN_IT(status);
-		set<T>(element, compoundChildren, value[index]);
+		set<T>(element, &compoundChildren[0], value[index]);
 	}
 	handle.set(builder);
 	return status;
@@ -234,3 +237,13 @@ template<typename T> MStatus initialize(MObject& dst, const char* name, std::vec
 #define COMPOUND_VALUE(T, N) T N;
 #define COMPOUND_ARRAY(T, N) std::vector<T> N;
 #define COMPOUND_END };
+
+struct SVec2 { short x = 0; short y = 0; SVec2(); SVec2(const short2& i); };
+struct IVec2 { int x = 0; int y = 0; IVec2(); IVec2(const int2& i); };
+struct FVec2 { float x = 0; float y = 0; FVec2(); FVec2(const float2& i); };
+struct DVec2 { double x = 0; double y = 0; DVec2(); DVec2(const double2& i); };
+struct SVec3 { short x = 0; short y = 0; short z = 0; SVec3(); SVec3(const short3& i); };
+struct IVec3 { int x = 0; int y = 0; int z = 0; IVec3(); IVec3(const int3& i); };
+struct FVec3 { float x = 0; float y = 0; float z = 0; FVec3(); FVec3(const float3& i); };
+struct DVec3 { double x = 0; double y = 0; double z = 0; DVec3(); DVec3(const double3& i); };
+struct DVec4 { double x = 0; double y = 0; double z = 0; double w = 0; DVec4(); DVec4(const double4& i); };

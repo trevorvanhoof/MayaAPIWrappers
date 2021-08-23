@@ -33,15 +33,15 @@ IMPLEMENT_NUMERIC(bool, Bool, Bool, kBoolean)
 // IMPLEMENT_NUMERIC(unsigned char, UChar, kByte) // There is no setter for byte...
 IMPLEMENT_NUMERIC(char, Char, Char, kChar)
 
-struct SVec2 { short x = 0; short y = 0; SVec2() {} SVec2(const short2& i) { x = i[0]; y = i[1]; } };
-struct IVec2 { int x = 0; int y = 0; IVec2() {} IVec2(const int2& i) { x = i[0]; y = i[1]; } };
-struct FVec2 { float x = 0; float y = 0; FVec2() {} FVec2(const float2& i) { x = i[0]; y = i[1]; } };
-struct DVec2 { double x = 0; double y = 0; DVec2() {} DVec2(const double2& i) { x = i[0]; y = i[1]; } };
-struct SVec3 { short x = 0; short y = 0; short z = 0; SVec3() {} SVec3(const short3& i) { x = i[0]; y = i[1]; z = i[2]; } };
-struct IVec3 { int x = 0; int y = 0; int z = 0; IVec3() {} IVec3(const int3& i) { x = i[0]; y = i[1]; z = i[2]; } };
-struct FVec3 { float x = 0; float y = 0; float z = 0; FVec3() {} FVec3(const float3& i) { x = i[0]; y = i[1]; z = i[2]; } };
-struct DVec3 { double x = 0; double y = 0; double z = 0; DVec3() {} DVec3(const double3& i) { x = i[0]; y = i[1]; z = i[2]; } };
-struct DVec4 { double x = 0; double y = 0; double z = 0; double w = 0; DVec4() {} DVec4(const double4& i) { x = i[0]; y = i[1]; z = i[2]; w = i[3]; } };
+SVec2::SVec2(){} SVec2::SVec2(const short2& i) { x = i[0]; y = i[1]; }
+IVec2::IVec2(){} IVec2::IVec2(const int2& i) { x = i[0]; y = i[1]; }
+FVec2::FVec2(){} FVec2::FVec2(const float2& i) { x = i[0]; y = i[1]; }
+DVec2::DVec2(){} DVec2::DVec2(const double2& i) { x = i[0]; y = i[1]; }
+SVec3::SVec3(){} SVec3::SVec3(const short3& i) { x = i[0]; y = i[1]; z = i[2]; }
+IVec3::IVec3(){} IVec3::IVec3(const int3& i) { x = i[0]; y = i[1]; z = i[2]; }
+FVec3::FVec3(){} FVec3::FVec3(const float3& i) { x = i[0]; y = i[1]; z = i[2]; }
+DVec3::DVec3(){} DVec3::DVec3(const double3& i) { x = i[0]; y = i[1]; z = i[2]; }
+DVec4::DVec4(){} DVec4::DVec4(const double4& i) { x = i[0]; y = i[1]; z = i[2]; w = i[3]; }
 
 template<> SVec2 get<SVec2>(MDataHandle& element) { return element.asShort2(); }
 template<> void set<SVec2>(MDataHandle& element, const SVec2& value) { element.set2Short(value.x, value.y); element.setClean(); }

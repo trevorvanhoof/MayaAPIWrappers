@@ -105,7 +105,7 @@ def scanCompound(code):
     return compoundName, members
 
 
-def processCompound(compoundType):
+def processCompound(compoundType, compoundTypeNames):
     name, attrs = compoundType
 
     code = ["""template<> MStatus initialize<%s>(MObject& dst, const char* name, std::vector<MObject>& children) {
@@ -113,45 +113,65 @@ def processCompound(compoundType):
     MFnCompoundAttribute fn;
     dst = fn.create(name, name, &status); 
     CHECK_MSTATUS_AND_RETURN_IT(status);
-""" % name]
-    for attrType, attrName, isArray in attrs:
+    size_t offset = children.size();
+    for(int i = 0; i < %d; ++i) children.emplace_back();
+""" % (name, len(attrs))]
+    for index, (attrType, attrName, isArray) in enumerate(attrs):
         extra = ''
         if isArray:
             extra = """\n        status = MFnAttribute(attr).setArray(true); CHECK_MSTATUS_AND_RETURN_IT(status);"""
+        isCompound = attrType in compoundTypeNames
         code.append("""
-    children.emplace_back();
     {
-        MObject& attr = children[children.size() - 1];
+        MObject& attr = children[offset + %d];
         MString childName = name;
         childName += "_%s";
-        status = initialize<%s>(attr, childName.asChar()); CHECK_MSTATUS_AND_RETURN_IT(status);%s
-        status = fn.addChild(attr); CHECK_MSTATUS_AND_RETURN_IT(status);
+        status = initialize<%s>(attr, childName.asChar()%s); CHECK_MSTATUS_AND_RETURN_IT(status);%s
+        status = fn.addChild(children[offset + %d]); CHECK_MSTATUS_AND_RETURN_IT(status);
     }
-""" % (attrName, attrType, extra))
+""" % (index, attrName, attrType, ', children' if isCompound else '', extra, index))
     code.append("""
     return status;
 }""")
     code.append("""
- template<> %s get<%s>(MDataHandle& element, const std::vector<MObject>& objects) {
+ template<> %s get<%s>(MDataHandle& element, const MObject* objects) {
     %s result;
     MDataHandle child;
 """ % (name, name, name))
+    offset = len(attrs)
+    sizes = [compoundTypeNames.get(attr[0], 0) for attr in attrs]
     for index, (attrType, attrName, isArray) in enumerate(attrs):
-        extra = 'child'
+        args = 'child'
         if isArray:
-            extra = 'MArrayDataHandle(child)'
-        code.append("""    child = element.child(objects[%d]); result.%s = get<%s>(%s);\n""" % (index, attrName, attrType, extra))
+            args = 'handle'
+        isCompound = attrType in compoundTypeNames
+        if isCompound:
+            args += ', objects + %d' % offset
+        if isArray:
+            code.append("""    child = element.child(objects[%d]); { MArrayDataHandle handle(child); result.%s = get<%s>(%s); }\n""" % (index, attrName, attrType, args))
+        else:
+            code.append("""    child = element.child(objects[%d]); result.%s = get<%s>(%s);\n""" % (index, attrName, attrType, args))
+        offset += sizes[index]
     code.append("""    return result;
 }""")
     code.append("""
-template<> void set<%s>(MDataHandle& element, const std::vector<MObject>& objects, const %s& value) {
+template<> void set<%s>(MDataHandle& element, const MObject* objects, const %s& value) {
     MDataHandle child;
 """ % (name, name))
+    offset = len(attrs)
+    sizes = [compoundTypeNames.get(attr[0], 0) for attr in attrs]
     for index, (attrType, attrName, isArray) in enumerate(attrs):
-        extra = 'child'
+        args = 'child'
         if isArray:
-            extra = 'MArrayDataHandle(child)'
-        code.append("""    child = element.child(objects[%s]); set<%s>(%s, value.%s);\n    child.setClean();\n\n""" % (index, attrType, extra, attrName))
+            args = 'handle'
+        isCompound = attrType in compoundTypeNames
+        if isCompound:
+            args += ', objects + %d' % offset
+        if isArray:
+            code.append("""    child = element.child(objects[%s]); { MArrayDataHandle handle(child); set<%s>(%s, value.%s); }\n    child.setClean();\n\n""" % (index, attrType, args, attrName))
+        else:
+            code.append("""    child = element.child(objects[%s]); set<%s>(%s, value.%s);\n    child.setClean();\n\n""" % (index, attrType, args, attrName))
+        offset += sizes[index]
     code.append("""    element.setClean();\n}\n\n""")
     return ''.join(code)
 
@@ -322,13 +342,14 @@ def main():
                 # compounds can reference other compounds, which we need before we can generate any code
                 compoundTypes.append(scanCompound(code))
             codeBlocks.append((nodeCode, deformerCode, typedDeformerCode))
+        compoundTypeNames = {name: len(members) for (name, members) in compoundTypes}
         for compoundType in compoundTypes:
-            fh.write(processCompound(compoundType))
+            fh.write(processCompound(compoundType, compoundTypeNames))
         for codeBlock in codeBlocks:
             for grpId, grp in enumerate(codeBlock):
                 isDeformer = grpId in (1, 2)
                 for code in grp:
-                    nodeName, nodeAttrs = scanNode(code, set(name for (name, _) in compoundTypes))
+                    nodeName, nodeAttrs = scanNode(code, compoundTypeNames)
                     if isDeformer:
                         registerPlugin.append('REGISTER_DEFORMER(%s)' % nodeName)
                     else:
