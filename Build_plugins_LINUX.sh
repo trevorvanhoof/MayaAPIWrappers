@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # batch file to build all maya plugins at once
 python Generate.py
-echo "build resources.inc"
+echo " -- created Generate.inc "
 
 function pause(){
    read -p "$*"
@@ -13,7 +13,7 @@ array=( 2017 2018 2019 2020 2022)
 
 mkdir -p "../build"
 cd "../build"
-pause 'check if not everything is removed'
+
 rm -r *
 
 

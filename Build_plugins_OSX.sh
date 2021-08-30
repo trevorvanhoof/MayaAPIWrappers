@@ -6,7 +6,7 @@ echo "$BASEDIR"
 cd "$BASEDIR"
 
 python Generate.py
-echo "build Generate.inc"
+echo " -- created Generate.inc "
 
 
 function pause(){
@@ -20,7 +20,6 @@ array=( 2017 2018 2019 2020 2022)
 
 mkdir -p "$BASEDIR/build"
 cd "$BASEDIR/build"
-pause 'check if not everything is removed'
 
 rm -r *
 

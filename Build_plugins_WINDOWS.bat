@@ -4,10 +4,7 @@ rem batch file to build all maya plugins at once
 cd %~dp0
 
 python Generate.py
-echo " ==================== "
-echo " created Generate.inc "
-echo "starting plugin build:"
-pause
+echo " -- created Generate.inc "
 
 set list= 2017 2018 2019 2020 2022
 

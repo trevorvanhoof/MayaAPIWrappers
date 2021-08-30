@@ -18,19 +18,11 @@ set(CMAKE_INSTALL_PREFIX "${CMAKE_CURRENT_SOURCE_DIR}/lib/maya${MAYA_VERSION}" )
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_CURRENT_SOURCE_DIR})
 
-# setup third party libs (Eigen)
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/externals/include)
-
 #-------------------------------------------------------------------------------
 file(GLOB_RECURSE SOURCE_FILES "*.cpp" "*.h" "*.hpp") 
 
-add_definitions( -DTBX_MAYA_ENABLE_USING_NAMESPACE_TBX_MAYA )
-add_definitions( -DTBX_MESH_ENABLE_USING_NAMESPACE_TBX_MESH )
-add_definitions( -DTBX_ENABLE_USING_NAMESPACE_TBX )
-
 find_package(Maya REQUIRED)
 include_directories(${MAYA_INCLUDE_DIR})
-include_directories(${CMAKE_CURRENT_SOURCE_DIR}/src)
 
 link_directories(${MAYA_LIBRARY_DIR})
 
