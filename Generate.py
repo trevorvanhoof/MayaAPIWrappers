@@ -36,7 +36,7 @@ def scan(path):
         endCursor = code.find(endTokens[tokenId], cursor)
         if endCursor == -1:
             raise RuntimeError(
-                'Code in "%s" is missing an _END token for "%s" token at %d' % (path, startTokens[i], cursor))
+                'Code in "%s" is missing an _END token for "%s" token at %d' % (path, startTokens[tokenId], cursor))
         output[tokenId].append(code[cursor:endCursor])
         cursor = endCursor + len(endTokens[tokenId])
 
@@ -253,9 +253,17 @@ bool %s::isInputPlug(const MPlug& p) {
             code.append('    status = MFnAttribute(%sAttr).setArray(true); CHECK_MSTATUS_AND_RETURN_IT(status);' % attrName)
         code.append('    status = addAttribute(%sAttr); CHECK_MSTATUS_AND_RETURN_IT(status);\n' % attrName)
 
+    if isDeformer:
+        nodeAttrs.append((False, True, False, False, None, 'outputGeom'))
     for isIn, isOut, isArray, isCompound, attrType, attrName in nodeAttrs:
         if isIn:
             continue
+
+        if isOut and isDeformer:
+            pass
+
+        outName = attrName if attrName == (isDeformer and 'outputGeom') else attrName + 'Attr'
+
         # this is an output or inout attribute, make it affected by all inputs
         for isIn2, isOut2, isArray2, isCompound2, attrType2, attrName2 in nodeAttrs:
             if not isOut:
@@ -267,8 +275,7 @@ bool %s::isInputPlug(const MPlug& p) {
                 if isOut2:
                     continue
 
-            code.append('    status = attributeAffects(%sAttr, %sAttr); CHECK_MSTATUS_AND_RETURN_IT(status);' % (
-            attrName2, attrName))
+            code.append('    status = attributeAffects(%sAttr, %s); CHECK_MSTATUS_AND_RETURN_IT(status);' % (attrName2, outName))
 
             if isCompound:
                 # The input affects each of the output's chidlren
@@ -285,7 +292,7 @@ bool %s::isInputPlug(const MPlug& p) {
             if isCompound2:
                 # Each of the input's children affect each the output
                 code.append('    for(const MObject& obj2 : _%s_%s_children) {' % (nodeName, attrName2))
-                code.append('        status = attributeAffects(obj2, %sAttr); CHECK_MSTATUS_AND_RETURN_IT(status);' % attrName)
+                code.append('        status = attributeAffects(obj2, %s); CHECK_MSTATUS_AND_RETURN_IT(status);' % outName)
                 # Each of the input's children affect each of the output's children'
                 # if isCompound:
                 #    code.append('    for(const MObject& obj : _%s_%s_children) {' % (nodeName, attrName))
@@ -294,6 +301,8 @@ bool %s::isInputPlug(const MPlug& p) {
                 code.append('    }')
 
         code.append('')
+    if isDeformer:
+        nodeAttrs.pop(-1)
 
     if isDeformer:
         code.append('    makePaintable("%s");' % nodeName)
