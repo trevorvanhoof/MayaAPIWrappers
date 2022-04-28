@@ -75,7 +75,7 @@ private:
 template<typename T, MFn::Type G>
 class TTypedMPxDeformer : public TMPxDeformer<T> {
 protected:
-	MObject inputGeometry(Meta& b) {
+	MObject inputGeometry(const Meta& b) {
 		// MItGeometry is a copy of the input that will be written to the output. Therefore we can't write to the output directly, but only to to MItGeometry.
 		// TODO: Verify that MItGeometry can't just be ignored if we get a handle to the output plug
 		// MItGeometry is geometry-agnostic so we can't use it for polygon-specific deformers. Therefore we will get the input geometry as the right type.
